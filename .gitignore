@@ -47,3 +47,7 @@ example
 modules/*/android/build/
 modules/*/android/.gradle/
 modules/*/android/.cxx/
+
+# EAS local build output
+build-*.apk
+build-*.aab
