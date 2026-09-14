@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "Player",
-    "slug": "Player",
+    "name": "Lucky Player",
+    "slug": "lucky-player",
+    "owner": "luqmankhokhar",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
@@ -40,7 +41,11 @@
         "expo-build-properties",
         {
           "android": {
-            "buildArchs": ["arm64-v8a", "armeabi-v7a", "x86_64"]
+            "buildArchs": [
+              "arm64-v8a",
+              "armeabi-v7a",
+              "x86_64"
+            ]
           }
         }
       ]
@@ -48,6 +53,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f608163b-6089-4c88-a008-5a4bead3f93b"
+      }
     }
   }
 }
