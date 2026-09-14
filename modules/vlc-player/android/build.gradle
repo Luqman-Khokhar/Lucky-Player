@@ -1,0 +1,23 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.vlcplayer'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.vlcplayer"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // LGPL-2.1: dynamically linked via AAR. Credit libVLC in the About screen.
+  implementation 'org.videolan.android:libvlc-all:3.7.6'
+}
