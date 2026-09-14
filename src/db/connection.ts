@@ -84,6 +84,21 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_videos_mtime ON videos(mtime) WHERE deleted_at IS NULL;
   CREATE INDEX IF NOT EXISTS idx_playback_updated ON playback_state(updated_at);
   `,
+  // v3: folders added through the system folder picker
+  `
+  CREATE TABLE IF NOT EXISTS folder_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tree_uri TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    added_at INTEGER NOT NULL,
+    last_scan_at INTEGER,
+    last_error TEXT,
+    deleted_at INTEGER
+  );
+  ALTER TABLE videos ADD COLUMN source_id INTEGER;
+  CREATE INDEX IF NOT EXISTS idx_videos_name_size ON videos(name, size) WHERE deleted_at IS NULL;
+  CREATE INDEX IF NOT EXISTS idx_videos_source ON videos(source, source_id);
+  `,
 ];
 
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;

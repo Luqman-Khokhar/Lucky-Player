@@ -1,6 +1,7 @@
 import type { ScannedVideo } from '@modules/vlc-player';
 
 import { getDatabase } from './connection';
+import { hashString } from './hash';
 
 export type SortDirection = 'asc' | 'desc';
 export type VideoSortKey = 'name' | 'date' | 'size' | 'duration';
@@ -40,10 +41,13 @@ export type VideoQuery = {
   direction: SortDirection;
 };
 
-type VideoRow = Omit<LibraryVideo, 'favorite' | 'thumbnailKey'> & { favorite: number; mediaId: number };
-type FolderRow = Omit<LibraryFolder, 'coverKey'> & { coverMediaId: number; coverModifiedAt: number };
+type VideoRow = Omit<LibraryVideo, 'favorite' | 'thumbnailKey'> & { favorite: number; mediaId: number | null };
+type FolderRow = Omit<LibraryFolder, 'coverKey'> & { coverMediaId: number | null; coverModifiedAt: number };
 
-const VISIBLE = 'v.deleted_at IS NULL AND v.hidden = 0';
+// Folder-picker copies of files MediaStore already lists are hidden, so nothing shows twice.
+const VISIBLE = `v.deleted_at IS NULL AND v.hidden = 0 AND NOT (v.source = 'saf' AND EXISTS (
+  SELECT 1 FROM videos m
+  WHERE m.source = 'mediastore' AND m.deleted_at IS NULL AND m.name = v.name AND m.size = v.size))`;
 
 const VIDEO_SELECT = `
   SELECT v.uri, v.name, v.folder AS folderName, v.bucket_id AS bucketId, v.size, v.duration, v.width, v.height,
@@ -64,12 +68,13 @@ const FOLDER_SORT_SQL: Record<FolderSortKey, string> = {
   count: 'g.videoCount',
 };
 
-export function thumbnailKeyFor(mediaId: number, modifiedAt: number): string {
-  return `m${mediaId}-${modifiedAt}`;
+/** Changes when the file changes, so edited videos get a fresh thumbnail. */
+export function thumbnailKeyFor(mediaId: number | null, uri: string, modifiedAt: number): string {
+  return mediaId != null ? `m${mediaId}-${modifiedAt}` : `u${hashString(uri)}-${modifiedAt}`;
 }
 
 function toVideo({ favorite, mediaId, ...row }: VideoRow): LibraryVideo {
-  return { ...row, favorite: favorite === 1, thumbnailKey: thumbnailKeyFor(mediaId, row.modifiedAt) };
+  return { ...row, favorite: favorite === 1, thumbnailKey: thumbnailKeyFor(mediaId, row.uri, row.modifiedAt) };
 }
 
 function escapeLike(term: string): string {
@@ -175,11 +180,17 @@ export async function listFolders(sort: FolderSortKey, direction: SortDirection)
     ORDER BY ${FOLDER_SORT_SQL[sort]} ${direction === 'asc' ? 'ASC' : 'DESC'}, g.name COLLATE NOCASE ASC`);
   return rows.map(({ coverMediaId, coverModifiedAt, ...row }) => ({
     ...row,
-    coverKey: thumbnailKeyFor(coverMediaId, coverModifiedAt),
+    coverKey: thumbnailKeyFor(coverMediaId, row.coverUri, coverModifiedAt),
   }));
 }
 
 export async function setFavorite(uri: string, favorite: boolean): Promise<void> {
   const db = await getDatabase();
   await db.runAsync('UPDATE videos SET favorite = ? WHERE uri = ?', [favorite ? 1 : 0, uri]);
+}
+
+export async function countVideos(): Promise<number> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ count: number }>(`SELECT COUNT(*) AS count FROM videos v WHERE ${VISIBLE}`);
+  return row?.count ?? 0;
 }

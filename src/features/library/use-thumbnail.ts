@@ -9,6 +9,11 @@ const MAX_ENTRIES = 1500;
 const resolved = new Map<string, string | null>();
 const pending = new Map<string, Promise<string | null>>();
 
+/** Forget remembered paths after the disk cache is cleared, so rows request fresh thumbnails. */
+export function clearThumbnailMemoryCache() {
+  resolved.clear();
+}
+
 function remember(cacheKey: string, path: string | null) {
   if (resolved.size >= MAX_ENTRIES) {
     const oldest = resolved.keys().next().value;

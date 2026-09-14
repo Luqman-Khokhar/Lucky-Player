@@ -8,6 +8,7 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { DeviceProfileCard } from '@/features/diagnostics/device-profile-card';
 
+import { FolderSourcesSection } from './folder-sources-section';
 import { LibrarySettingsSection } from './library-settings-section';
 import { PlaybackSettingsSection } from './playback-settings-section';
 import { SettingsRow, SettingsSection } from './settings-section';
@@ -21,6 +22,7 @@ export function SettingsScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}>
         <View style={styles.column}>
           <LibrarySettingsSection />
+          <FolderSourcesSection />
           <PlaybackSettingsSection />
           <DeviceProfileCard />
           <SettingsSection title="About">

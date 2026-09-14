@@ -1,7 +1,16 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 import * as MediaLibrary from 'expo-media-library';
 
-import { syncScannedVideos } from '@/db';
+import {
+  addFolderSource,
+  countVideos,
+  listFolderSources,
+  markFolderScanFailed,
+  removeFolderSource,
+  syncFolderVideos,
+  syncScannedVideos,
+  type FolderSource,
+} from '@/db';
 import VlcPlayer from '@modules/vlc-player';
 
 export type LibraryPermission = 'unknown' | 'granted' | 'limited' | 'denied';
@@ -18,6 +27,7 @@ export type LibraryState = {
 };
 
 const RESCAN_MIN_INTERVAL_MS = 30_000;
+export const THUMBNAIL_CACHE_MAX_BYTES = 150 * 1024 * 1024;
 
 const initialState: LibraryState = {
   permission: 'unknown',
@@ -28,6 +38,10 @@ const initialState: LibraryState = {
   videoCount: 0,
   version: 0,
 };
+
+function messageOf(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export const resolveLibraryPermission = createAsyncThunk(
   'library/permission',
@@ -44,23 +58,48 @@ export const resolveLibraryPermission = createAsyncThunk(
   }
 );
 
+/** MediaStore (when allowed) plus every added folder, then keeps the thumbnail cache under its cap. */
 export const scanLibrary = createAsyncThunk(
   'library/scan',
-  async (_options: void | { force?: boolean }) => {
-    const videos = await VlcPlayer.scanVideos();
-    const result = await syncScannedVideos(videos);
-    return { videoCount: result.total, scannedAt: Date.now() };
+  async (_options: void | { force?: boolean }, { getState }) => {
+    const { library } = getState() as { library: LibraryState };
+    if (library.permission !== 'denied') {
+      await syncScannedVideos(await VlcPlayer.scanVideos());
+    }
+    for (const source of await listFolderSources()) {
+      try {
+        await syncFolderVideos(source.id, await VlcPlayer.scanFolder(source.treeUri));
+      } catch (error) {
+        // One unreadable folder must not fail the whole scan; Settings shows the error.
+        await markFolderScanFailed(source.id, messageOf(error, 'Scan failed'));
+      }
+    }
+    await VlcPlayer.trimThumbnailCache(THUMBNAIL_CACHE_MAX_BYTES).catch(() => 0);
+    return { videoCount: await countVideos(), scannedAt: Date.now() };
   },
   {
     condition: (options, { getState }) => {
       const { library } = getState() as { library: LibraryState };
-      if (library.scanStatus === 'scanning') return false;
-      if (library.permission === 'unknown' || library.permission === 'denied') return false;
+      if (library.scanStatus === 'scanning' || library.permission === 'unknown') return false;
       const force = typeof options === 'object' && options.force === true;
       return force || !library.lastScanAt || Date.now() - library.lastScanAt > RESCAN_MIN_INTERVAL_MS;
     },
   }
 );
+
+/** Opens the folder picker, saves the folder and scans it. Resolves null when cancelled. */
+export const pickAndAddFolder = createAsyncThunk('library/addFolder', async () => {
+  const picked = await VlcPlayer.pickFolder();
+  if (!picked) return null;
+  const id = await addFolderSource(picked.uri, picked.name);
+  const count = await syncFolderVideos(id, await VlcPlayer.scanFolder(picked.uri));
+  return { name: picked.name, count };
+});
+
+export const removeFolder = createAsyncThunk('library/removeFolder', async (source: FolderSource) => {
+  await removeFolderSource(source.id);
+  await VlcPlayer.releaseFolder(source.treeUri).catch(() => undefined);
+});
 
 const librarySlice = createSlice({
   name: 'library',
@@ -92,6 +131,12 @@ const librarySlice = createSlice({
       .addCase(scanLibrary.rejected, (state, action) => {
         state.scanStatus = 'error';
         state.scanError = action.error.message ?? 'Could not scan videos';
+      })
+      .addCase(pickAndAddFolder.fulfilled, (state, action) => {
+        if (action.payload) state.version += 1;
+      })
+      .addCase(removeFolder.fulfilled, (state) => {
+        state.version += 1;
       });
   },
 });

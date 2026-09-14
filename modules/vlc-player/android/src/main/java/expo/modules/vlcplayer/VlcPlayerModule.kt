@@ -3,6 +3,7 @@ package expo.modules.vlcplayer
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.net.Uri
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -13,6 +14,7 @@ class VlcPlayerModule : Module() {
     get() = requireNotNull(appContext.reactContext) { "React context is not available" }
 
   private var pendingPick: Promise? = null
+  private var pendingFolderPick: Promise? = null
 
   private val scanExecutor = Executors.newSingleThreadExecutor()
 
@@ -42,6 +44,51 @@ class VlcPlayerModule : Module() {
       }
     }
 
+    AsyncFunction("trimThumbnailCache") { maxBytes: Double, promise: Promise ->
+      val appContext = context
+      thumbnailExecutor.execute {
+        promise.resolve(ThumbnailCache.trim(appContext, maxBytes.toLong()).toDouble())
+      }
+    }
+
+    AsyncFunction("pickFolder") { promise: Promise ->
+      if (pendingFolderPick != null) {
+        promise.reject("ERR_PICK_IN_PROGRESS", "A folder picker is already open", null)
+        return@AsyncFunction
+      }
+      val activity = appContext.throwingActivity
+      pendingFolderPick = promise
+      val launched = FolderSources.createIntents().any { intent ->
+        try {
+          activity.startActivityForResult(intent, FolderSources.REQUEST_CODE)
+          true
+        } catch (_: ActivityNotFoundException) {
+          false
+        }
+      }
+      if (!launched) {
+        pendingFolderPick = null
+        promise.reject("ERR_NO_PICKER", "No folder picker is available on this device", null)
+      }
+    }
+
+    AsyncFunction("scanFolder") { treeUri: String, promise: Promise ->
+      val appContext = context
+      scanExecutor.execute {
+        try {
+          promise.resolve(FolderSources.scan(appContext, Uri.parse(treeUri)))
+        } catch (e: SecurityException) {
+          promise.reject("ERR_PERMISSION", "Access to this folder was lost", e)
+        } catch (e: Exception) {
+          promise.reject("ERR_SCAN", e.message ?: "Could not scan the folder", e)
+        }
+      }
+    }
+
+    AsyncFunction("releaseFolder") { treeUri: String ->
+      FolderSources.release(context, Uri.parse(treeUri))
+    }
+
     AsyncFunction("pickVideo") { promise: Promise ->
       if (pendingPick != null) {
         promise.reject("ERR_PICK_IN_PROGRESS", "A file picker is already open", null)
@@ -64,6 +111,18 @@ class VlcPlayerModule : Module() {
     }
 
     OnActivityResult { _, (requestCode, resultCode, intent) ->
+      if (requestCode == FolderSources.REQUEST_CODE) {
+        val folderPromise = pendingFolderPick ?: return@OnActivityResult
+        pendingFolderPick = null
+        val treeUri = intent?.data
+        when {
+          resultCode != Activity.RESULT_OK || treeUri == null -> folderPromise.resolve(null)
+          !FolderSources.persist(context, treeUri) ->
+            folderPromise.reject("ERR_PERMISSION", "Android did not allow lasting access to this folder", null)
+          else -> folderPromise.resolve(FolderSources.describe(context, treeUri))
+        }
+        return@OnActivityResult
+      }
       if (requestCode != VideoPicker.REQUEST_CODE) return@OnActivityResult
       val promise = pendingPick ?: return@OnActivityResult
       pendingPick = null

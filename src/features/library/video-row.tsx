@@ -36,7 +36,7 @@ export const VideoRow = memo(function VideoRow({ video, showFolder = false, onPr
     <View style={styles.row}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${video.name}, ${formatTime(video.duration)}`}
+        accessibilityLabel={video.duration > 0 ? `${video.name}, ${formatTime(video.duration)}` : video.name}
         accessibilityHint={video.position > 0 ? 'Resumes playback' : 'Plays the video'}
         onPress={() => onPress(video)}
         style={({ pressed }) => [styles.main, pressed && { backgroundColor: theme.backgroundElement }]}>

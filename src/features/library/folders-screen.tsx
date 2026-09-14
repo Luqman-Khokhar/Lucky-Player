@@ -13,6 +13,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useAppSelector } from '@/store';
 import { formatCount, formatScanTime } from '@/utils/format';
 
+import { AddFolderFooter } from './add-folder-footer';
 import { FolderRow } from './folder-row';
 import { PermissionGate } from './permission-gate';
 import { SortChips, type SortOption } from './sort-chips';
@@ -100,6 +101,7 @@ export function FoldersScreen() {
           data={folders.data}
           keyExtractor={(folder) => folder.bucketId}
           renderItem={({ item }) => <FolderRow folder={item} onPress={openFolder} />}
+          ListFooterComponent={<AddFolderFooter onPress={() => router.navigate('/settings')} />}
           refreshing={scanning}
           onRefresh={rescan}
           contentContainerStyle={styles.list}
