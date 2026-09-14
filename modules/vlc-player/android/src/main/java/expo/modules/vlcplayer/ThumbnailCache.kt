@@ -21,7 +21,10 @@ object ThumbnailCache {
     val width = requestedWidth.coerceIn(MIN_WIDTH, MAX_WIDTH)
     val dir = File(context.cacheDir, "thumbnails").apply { mkdirs() }
     val file = File(dir, "${key.replace(Regex("[^A-Za-z0-9_-]"), "_")}-$width.jpg")
-    if (file.length() > 0) return Uri.fromFile(file).toString()
+    if (file.length() > 0) {
+      file.setLastModified(System.currentTimeMillis()) // recency for trim()
+      return Uri.fromFile(file).toString()
+    }
 
     return try {
       val bitmap = load(context, Uri.parse(uriString), width) ?: return null
@@ -35,6 +38,23 @@ object ThumbnailCache {
     } catch (e: RuntimeException) {
       null // SecurityException, IllegalArgumentException from unreadable or corrupt files
     }
+  }
+
+  /**
+   * Deletes least recently used thumbnails when the cache exceeds [maxBytes], down to 80% of it so
+   * the next scan does not trim again immediately. Returns the bytes left. Pass 0 to clear everything.
+   */
+  fun trim(context: Context, maxBytes: Long): Long {
+    val files = File(context.cacheDir, "thumbnails").listFiles()?.filter { it.isFile } ?: return 0L
+    var total = files.sumOf { it.length() }
+    if (total <= maxBytes) return total
+    val target = if (maxBytes <= 0L) 0L else maxBytes / 10 * 8
+    for (file in files.sortedBy { it.lastModified() }) {
+      if (total <= target) break
+      val size = file.length()
+      if (file.delete()) total -= size
+    }
+    return total
   }
 
   private fun load(context: Context, uri: Uri, width: Int): Bitmap? {

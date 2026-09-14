@@ -6,7 +6,8 @@ import { resolveLibraryPermission, scanLibrary } from '@/store/library-slice';
 
 /**
  * Checks video access and rescans on launch and whenever the app returns to the foreground
- * (videos may have been downloaded or deleted meanwhile). The scan thunk throttles repeats.
+ * (videos may have been downloaded or deleted meanwhile). The scan thunk throttles repeats and
+ * still scans added folders when media access is denied.
  */
 export function useLibrarySync() {
   const dispatch = useAppDispatch();
@@ -15,9 +16,7 @@ export function useLibrarySync() {
     const refresh = (force: boolean) => {
       dispatch(resolveLibraryPermission({ request: false }))
         .unwrap()
-        .then(({ permission }) => {
-          if (permission !== 'denied') dispatch(scanLibrary({ force }));
-        })
+        .then(() => dispatch(scanLibrary({ force })))
         .catch((error: unknown) => console.warn('[library] permission check failed', error));
     };
 

@@ -119,6 +119,27 @@ export type ScannedVideo = {
   relativePath: string;
 };
 
+export type PickedFolder = {
+  /** Persisted SAF tree URI */
+  uri: string;
+  name: string;
+};
+
+export type FolderVideo = {
+  /** SAF document URI inside the tree */
+  uri: string;
+  name: string;
+  size: number;
+  /** Epoch milliseconds, 0 when the provider does not report it */
+  modifiedAt: number;
+  mimeType: string;
+  /** Document id of the containing folder */
+  parentId: string;
+  folderName: string;
+  /** Display path from the picked folder, e.g. "Downloads/Anime" */
+  folderPath: string;
+};
+
 export type PickedVideo = {
   uri: string;
   name: string;
