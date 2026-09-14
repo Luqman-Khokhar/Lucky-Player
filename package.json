@@ -48,7 +48,12 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "eas": "bash scripts/eas.sh",
+    "eas:whoami": "bash scripts/eas.sh whoami",
+    "build:apk": "bash scripts/eas.sh build -p android --profile preview",
+    "build:apk:local": "bash scripts/eas.sh build -p android --profile preview --local",
+    "build:aab": "bash scripts/eas.sh build -p android --profile production"
   },
   "private": true
 }
