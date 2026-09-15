@@ -1,6 +1,7 @@
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { Icon } from '@/components/ui/icon';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -51,6 +52,17 @@ export function SettingsPageContent({ page, values, actions, onOpen }: SettingsP
     case 'subtitles':
       return (
         <View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Load subtitle file"
+            accessibilityHint="Opens the file picker"
+            onPress={actions.loadSubtitleFile}
+            style={({ pressed }) => [styles.loadRow, pressed && { backgroundColor: theme.playerPressed }]}>
+            <Icon name="file_open" size={22} color={theme.playerAccent} />
+            <ThemedText type="smallBold" style={{ color: theme.playerAccent }}>
+              Load subtitle file
+            </ThemedText>
+          </Pressable>
           <OptionList
             label="Subtitle track"
             options={trackOptions(values.tracks?.subtitle)}
@@ -64,6 +76,10 @@ export function SettingsPageContent({ page, values, actions, onOpen }: SettingsP
             value={values.subtitleDelay}
             onChange={actions.changeSubtitleDelay}
           />
+          <ThemedText type="small" style={[styles.note, { color: theme.playerTextSecondary }]}>
+            Subtitle files named like the video, such as movie.srt next to movie.mkv, load on their own for videos in
+            folders you added. Text size and color are in the app settings.
+          </ThemedText>
         </View>
       );
     case 'speed':
@@ -79,8 +95,9 @@ export function SettingsPageContent({ page, values, actions, onOpen }: SettingsP
         <View>
           <OptionList label="Decoder" options={DECODER_OPTIONS} selected={values.hwMode} onSelect={actions.selectDecoder} />
           <ThemedText type="small" style={[styles.note, { color: theme.playerTextSecondary }]}>
-            Now decoding with {values.hardwareDecoding ? 'hardware' : 'software'}. Changing this restarts the video at the
-            same position.
+            Now decoding with {values.hardwareDecoding ? 'hardware' : 'software'}
+            {values.codec ? ` (${values.codec.toUpperCase()})` : ''}. Changing this restarts the video at the same
+            position and is remembered for this video.
           </ThemedText>
         </View>
       );
@@ -90,6 +107,15 @@ export function SettingsPageContent({ page, values, actions, onOpen }: SettingsP
 }
 
 const styles = StyleSheet.create({
+  loadRow: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    marginBottom: Spacing.two,
+    borderRadius: Spacing.three,
+  },
   note: {
     paddingHorizontal: Spacing.three,
     paddingTop: Spacing.three,

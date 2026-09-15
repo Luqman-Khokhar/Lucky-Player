@@ -2,12 +2,14 @@ import { configureStore } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
 
 import libraryReducer from './library-slice';
+import playQueueReducer from './play-queue-slice';
 import settingsReducer from './settings-slice';
 
 export const store = configureStore({
   reducer: {
     settings: settingsReducer,
     library: libraryReducer,
+    playQueue: playQueueReducer,
   },
 });
 

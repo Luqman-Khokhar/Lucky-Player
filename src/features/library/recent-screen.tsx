@@ -13,6 +13,7 @@ import { formatCount } from '@/utils/format';
 import { PermissionGate } from './permission-gate';
 import { useLibraryActions } from './use-library-actions';
 import { useLibraryQuery } from './use-library-query';
+import { usePlayVideo } from './use-play-video';
 import { VideoRow } from './video-row';
 
 const RECENT_LIMIT = 50;
@@ -21,11 +22,9 @@ export function RecentScreen() {
   const router = useRouter();
   const { toggleFavorite } = useLibraryActions();
   const recent = useLibraryQuery('recent', () => listRecent(RECENT_LIMIT));
+  const playVideo = usePlayVideo();
 
-  const play = useCallback(
-    (video: LibraryVideo) => router.push({ pathname: '/player', params: { uri: video.uri, title: video.name } }),
-    [router]
-  );
+  const play = useCallback((video: LibraryVideo) => playVideo(video, recent.data ?? []), [playVideo, recent.data]);
 
   const renderBody = () => {
     if (recent.data === null) {

@@ -1,7 +1,13 @@
 import { getSetting, setSetting } from '@/db';
 
 import { store } from './index';
-import { SEEK_STEP_CHOICES, settingsHydrated, type SettingsState } from './settings-slice';
+import {
+  SEEK_STEP_CHOICES,
+  SUBTITLE_COLOR_CHOICES,
+  SUBTITLE_SIZE_CHOICES,
+  settingsHydrated,
+  type SettingsState,
+} from './settings-slice';
 
 const SETTINGS_KEY = 'app.settings';
 const SAVE_DEBOUNCE_MS = 300;
@@ -14,6 +20,13 @@ function parseSettings(value: unknown): Partial<SettingsState> {
     result.hwDecoding = input.hwDecoding;
   }
   if (typeof input.resumePlayback === 'boolean') result.resumePlayback = input.resumePlayback;
+  if (typeof input.autoPlayNext === 'boolean') result.autoPlayNext = input.autoPlayNext;
+  if (typeof input.matchFrameRate === 'boolean') result.matchFrameRate = input.matchFrameRate;
+  if (typeof input.subtitleBackground === 'boolean') result.subtitleBackground = input.subtitleBackground;
+  const size = SUBTITLE_SIZE_CHOICES.find((choice) => choice === input.subtitleSize);
+  if (size) result.subtitleSize = size;
+  const color = SUBTITLE_COLOR_CHOICES.find((choice) => choice === input.subtitleColor);
+  if (color) result.subtitleColor = color;
   if (SEEK_STEP_CHOICES.some((choice) => choice === input.seekStepSec)) result.seekStepSec = input.seekStepSec as number;
   return result;
 }

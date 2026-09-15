@@ -19,9 +19,15 @@ export type LoadEventPayload = {
   width: number;
   height: number;
   videoCodec: string;
+  /** Frames per second, 0 when unknown */
+  frameRate: number;
   hardwareDecoding: boolean;
   tracks: PlayerTracks;
 };
+
+export type PictureInPictureEventPayload = { active: boolean };
+/** The player already applied the action; `paused` is its state afterwards. */
+export type PictureInPictureActionEventPayload = { action: 'rewind' | 'toggle' | 'forward'; paused: boolean };
 
 export type ProgressEventPayload = { position: number; duration: number };
 export type BufferingEventPayload = { percent: number };
@@ -44,6 +50,10 @@ export type VlcPlayerViewProps = {
   source: string | null;
   /** Milliseconds. Read only when the source loads. */
   startPosition?: number;
+  /** Subtitle file added on every load: content:// with a persisted grant, or file:// */
+  externalSubtitle?: string;
+  /** Switch the display to a refresh rate that is a whole multiple of the frame rate. Default true */
+  matchFrameRate?: boolean;
   paused?: boolean;
   /** 0.25 – 4 */
   rate?: number;
@@ -68,6 +78,9 @@ export type VlcPlayerViewProps = {
   onError?: NativeEventHandler<ErrorEventPayload>;
   onDecoderFallback?: NativeEventHandler<DecoderFallbackEventPayload>;
   onTracksChanged?: NativeEventHandler<PlayerTracks>;
+  onPictureInPictureChange?: NativeEventHandler<PictureInPictureEventPayload>;
+  /** A button in the picture-in-picture window was pressed. */
+  onPictureInPictureAction?: NativeEventHandler<PictureInPictureActionEventPayload>;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -153,6 +166,8 @@ export type PickedVideo = {
 };
 
 export type MediaVolume = { current: number; max: number };
+
+export type PickedSubtitle = { uri: string; name: string };
 
 export type VideoTrackInfo ={ id: number; codec: string; width: number; height: number; fps: number; bitrate: number };
 export type AudioTrackInfo = {

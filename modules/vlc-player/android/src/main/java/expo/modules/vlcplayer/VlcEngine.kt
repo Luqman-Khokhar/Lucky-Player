@@ -20,25 +20,82 @@ class OpenedMedia(val media: Media, val descriptor: ParcelFileDescriptor?)
 object VlcEngine {
   private const val TAG = "VlcEngine"
 
+  private const val DEFAULT_SUBTITLE_SCALE = 100
+  private const val DEFAULT_SUBTITLE_COLOR = 0xFFFFFF
+  private const val SUBTITLE_BACKGROUND_OPACITY = 160
+
+  private val BASE_OPTIONS = listOf(
+    "--audio-time-stretch", // pitch-corrected playback speed
+    "--avcodec-threads=0"   // software decoder picks thread count per core count
+  )
+
+  private val lock = Any()
+
   @Volatile
   private var libVLC: LibVLC? = null
 
+  // Subtitle look is an instance option, so a style change swaps in a new instance. Guarded by lock.
+  private var subtitleOptions: List<String> = subtitleOptionsFor(DEFAULT_SUBTITLE_SCALE, DEFAULT_SUBTITLE_COLOR, false)
+
+  // Open users per instance; a replaced instance is released when its last user finishes. Guarded by lock.
+  private val users = HashMap<LibVLC, Int>()
+
   fun get(context: Context): LibVLC =
-    libVLC ?: synchronized(this) {
-      libVLC ?: run {
-        val startedAt = SystemClock.elapsedRealtime()
-        LibVLC(
-          context.applicationContext,
-          arrayListOf(
-            "--audio-time-stretch", // pitch-corrected playback speed
-            "--avcodec-threads=0"   // software decoder picks thread count per core count
-          )
-        ).also {
-          libVLC = it
-          Log.i(TAG, "libVLC initialized in ${SystemClock.elapsedRealtime() - startedAt} ms")
-        }
-      }
+    libVLC ?: synchronized(lock) {
+      libVLC ?: create(context.applicationContext).also { libVLC = it }
     }
+
+  /** Like [get], but the instance stays usable until [release], even if a style change replaces it meanwhile. */
+  fun acquire(context: Context): LibVLC = synchronized(lock) {
+    get(context).also { users[it] = (users[it] ?: 0) + 1 }
+  }
+
+  fun release(instance: LibVLC) {
+    synchronized(lock) {
+      val remaining = (users[instance] ?: 1) - 1
+      if (remaining > 0) {
+        users[instance] = remaining
+        return
+      }
+      users.remove(instance)
+      if (instance !== libVLC) instance.release()
+    }
+  }
+
+  /** Subtitle size (percent), RGB color and background box for videos opened after this call. */
+  fun configureSubtitles(context: Context, scale: Int, color: Int, background: Boolean) {
+    val options = subtitleOptionsFor(scale, color, background)
+    synchronized(lock) {
+      if (options == subtitleOptions) return
+      subtitleOptions = options
+      val previous = libVLC ?: return
+      libVLC = null
+      if (previous !in users) previous.release()
+    }
+    warmUp(context)
+  }
+
+  private fun create(context: Context): LibVLC {
+    val startedAt = SystemClock.elapsedRealtime()
+    val instance = try {
+      LibVLC(context, ArrayList(BASE_OPTIONS + subtitleOptions))
+    } catch (e: IllegalStateException) {
+      // An option this libVLC build does not know fails the whole instance; fall back to default subtitles.
+      Log.w(TAG, "libVLC rejected subtitle options $subtitleOptions", e)
+      LibVLC(context, ArrayList(BASE_OPTIONS))
+    }
+    Log.i(TAG, "libVLC initialized in ${SystemClock.elapsedRealtime() - startedAt} ms")
+    return instance
+  }
+
+  private fun subtitleOptionsFor(scale: Int, color: Int, background: Boolean): List<String> = buildList {
+    add("--sub-text-scale=${scale.coerceIn(50, 300)}")
+    add("--freetype-color=${color and 0xFFFFFF}")
+    if (background) {
+      add("--freetype-background-opacity=$SUBTITLE_BACKGROUND_OPACITY")
+      add("--freetype-background-color=0")
+    }
+  }
 
   /** Creates the engine on a background thread so the first video does not pay for libVLC startup. */
   fun warmUp(context: Context) {

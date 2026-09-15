@@ -99,6 +99,11 @@ const MIGRATIONS: string[] = [
   CREATE INDEX IF NOT EXISTS idx_videos_name_size ON videos(name, size) WHERE deleted_at IS NULL;
   CREATE INDEX IF NOT EXISTS idx_videos_source ON videos(source, source_id);
   `,
+  // v4: per-video decoder choice and picked subtitle file
+  `
+  ALTER TABLE playback_state ADD COLUMN hw_mode TEXT;
+  ALTER TABLE playback_state ADD COLUMN subtitle_uri TEXT;
+  `,
 ];
 
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;

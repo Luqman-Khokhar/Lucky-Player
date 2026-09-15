@@ -1,13 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { addSoftwareDecoderCodec, getPlaybackState, getSoftwareDecoderCodecs, savePlaybackState } from '@/db';
+import {
+  addSoftwareDecoderCodec,
+  getPlaybackState,
+  getSoftwareDecoderCodecs,
+  savePlaybackChoices,
+  savePlaybackState,
+  type PlaybackChoices,
+} from '@/db';
 import VlcPlayer, { type DecoderFallbackEventPayload, type HwDecodingMode } from '@modules/vlc-player';
 
 const SAVE_INTERVAL_MS = 5000;
 const RESUME_MIN_MS = 5000;
 const RESUME_END_GUARD_MS = 10000;
 
-export type PreparedSession = { startPosition: number; hwMode: HwDecodingMode };
+const NO_CHOICES: PlaybackChoices = {
+  audioTrack: null,
+  subtitleTrack: null,
+  audioDelay: 0,
+  subtitleDelay: 0,
+  hwMode: null,
+  subtitleUri: null,
+};
+const HW_MODES: readonly (HwDecodingMode | null)[] = ['auto', 'hw', 'sw'];
+
+export type PreparedSession = { startPosition: number; hwMode: HwDecodingMode; choices: PlaybackChoices };
 
 type Options = { hwDecoding: HwDecodingMode; resumePlayback: boolean };
 
@@ -25,20 +42,31 @@ export function usePlaybackSession(uri: string | undefined, { hwDecoding, resume
     let cancelled = false;
     (async () => {
       const [saved, blockedCodecs, info] = await Promise.all([
-        resumePlayback ? getPlaybackState(uri).catch(() => null) : Promise.resolve(null),
+        getPlaybackState(uri).catch(() => null),
         getSoftwareDecoderCodecs().catch((): string[] => []),
         VlcPlayer.getMediaInfo(uri).catch(() => null),
       ]);
       if (cancelled) return;
       const duration = info?.duration || saved?.duration || 0;
       const resumeAt =
-        saved && saved.position >= RESUME_MIN_MS && (duration <= 0 || saved.position < duration - RESUME_END_GUARD_MS)
+        resumePlayback && saved && saved.position >= RESUME_MIN_MS && (duration <= 0 || saved.position < duration - RESUME_END_GUARD_MS)
           ? saved.position
           : 0;
       const codec = info?.video[0]?.codec.trim().toLowerCase() ?? '';
       const knownBad = hwDecoding === 'auto' && codec !== '' && blockedCodecs.includes(codec);
       progressRef.current = { position: resumeAt, duration };
-      setPrepared({ startPosition: resumeAt, hwMode: knownBad ? 'sw' : hwDecoding });
+      const choices: PlaybackChoices = saved
+        ? {
+            audioTrack: saved.audioTrack,
+            subtitleTrack: saved.subtitleTrack,
+            audioDelay: saved.audioDelay,
+            subtitleDelay: saved.subtitleDelay,
+            hwMode: HW_MODES.includes(saved.hwMode) ? saved.hwMode : null,
+            subtitleUri: saved.subtitleUri,
+          }
+        : NO_CHOICES;
+      // A decoder picked for this video wins over the app default and the failed-codec list.
+      setPrepared({ startPosition: resumeAt, hwMode: choices.hwMode ?? (knownBad ? 'sw' : hwDecoding), choices });
     })();
     return () => {
       cancelled = true;
@@ -75,5 +103,12 @@ export function usePlaybackSession(uri: string | undefined, { hwDecoding, resume
     setPrepared((current) => current && { ...current, startPosition: progressRef.current.position });
   }, []);
 
-  return { prepared, progressRef, reportProgress, markEnded, rememberFallback, restartFromCurrent };
+  const saveChoices = useCallback(
+    (choices: Partial<PlaybackChoices>) => {
+      if (uri) savePlaybackChoices(uri, choices).catch(warn('choices'));
+    },
+    [uri]
+  );
+
+  return { prepared, progressRef, reportProgress, markEnded, rememberFallback, restartFromCurrent, saveChoices };
 }
