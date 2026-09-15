@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Gesture } from 'react-native-gesture-handler';
 
-import type { SystemControls } from './use-system-controls';
+import { VOLUME_LEVEL_MAX, type SystemControls } from './use-system-controls';
 
 const DOUBLE_TAP_MAX_DELAY_MS = 250;
 const FEEDBACK_MS = 650;
@@ -18,7 +18,8 @@ const ZOOM_SNAP = 1.05;
 export const MAX_ZOOM = 4;
 
 export type GestureHud =
-  | { kind: 'brightness' | 'volume' | 'zoom'; value: number }
+  /** Volume runs 0..2, where above 1 is the volume boost; `limited` means the swipe hit the boost limit. */
+  | { kind: 'brightness' | 'volume' | 'zoom'; value: number; limited?: boolean }
   | { kind: 'seek'; target: number; delta: number }
   | { kind: 'boost' };
 
@@ -121,9 +122,10 @@ export function usePlayerGestures(options: Options) {
           show('pan', { kind: 'seek', target: state.target, delta: state.target - state.start });
           return;
         }
-        const value = clamp(state.start - event.translationY / verticalRange, 0, 1);
+        const upper = state.mode === 'volume' ? VOLUME_LEVEL_MAX : 1;
+        const value = clamp(state.start - event.translationY / verticalRange, 0, upper);
         const applied = state.mode === 'brightness' ? system.setBrightness(value) : system.setVolume(value);
-        show('pan', { kind: state.mode, value: applied });
+        show('pan', { kind: state.mode, value: applied, limited: applied > 1 && value - applied > 0.05 });
       })
       .onEnd((_event, success) => {
         if (success && swipe.current.mode === 'seek') onSeek(swipe.current.target);

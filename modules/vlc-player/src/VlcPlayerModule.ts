@@ -9,9 +9,16 @@ import type {
   PickedSubtitle,
   PickedVideo,
   ScannedVideo,
+  SoundEffectsStatus,
+  EqualizerInfo,
 } from './VlcPlayer.types';
 
-declare class VlcPlayerModule extends NativeModule {
+type VlcPlayerModuleEvents = {
+  /** A notification button changed the sound settings; `settings` is the saved settings as JSON. */
+  onSoundSettingsChanged: (event: { settings: string }) => void;
+};
+
+declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
   /** Every video MediaStore knows about. Rejects with ERR_PERMISSION without video access. */
   scanVideos(): Promise<ScannedVideo[]>;
   /** file:// JPEG path, or null when no frame could be read. `key` must change when the file changes. */
@@ -27,6 +34,15 @@ declare class VlcPlayerModule extends NativeModule {
   pickVideo(): Promise<PickedVideo | null>;
   /** Starts libVLC in the background so the first video opens quickly. Resolves immediately. */
   warmUp(): Promise<void>;
+  /** Band layout of the phone's global equalizer. */
+  getEqualizerInfo(): Promise<EqualizerInfo>;
+  /** Sound settings saved on the native side (JSON), or null before the first save. */
+  getSoundSettings(): Promise<string | null>;
+  /**
+   * Saves the sound request (JSON: settings, boostLimit, presets with levelsMb, customLevelsMb), applies the boost and
+   * equalizer to every app's audio, and shows or hides the controls notification. Reports what the phone accepted.
+   */
+  updateSoundEffects(requestJson: string): Promise<SoundEffectsStatus>;
   /** Resolves null when the user cancels. The read grant is persisted so the file reloads next time. */
   pickSubtitle(): Promise<PickedSubtitle | null>;
   /** Size in percent and RGB color; applies to videos opened afterwards. */

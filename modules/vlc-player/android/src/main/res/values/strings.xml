@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="sound_notification_title">Lucky Player sound</string>
+  <string name="sound_notification_channel">Volume boost and equalizer</string>
+  <string name="sound_notification_channel_description">Controls for the volume boost and equalizer while other apps play.</string>
+
+  <string name="sound_volume_boost">Volume boost</string>
+  <string name="sound_equalizer">Equalizer</string>
+  <string name="sound_off_state">Off</string>
+  <string name="sound_turn_off">Turn off</string>
+  <string name="sound_custom_preset">Custom</string>
+  <string name="sound_equalizer_unavailable">Not available</string>
+  <string name="sound_boost_limit_hint">Limit +%1$d%% · raise it in Lucky Player</string>
+  <string name="sound_preset_position">Preset %1$d of %2$d</string>
+  <string name="sound_custom_position">Your custom sound</string>
+  <string name="sound_equalizer_off_hint">Tap Equalizer or a preset button to turn it on</string>
+
+  <string name="sound_cd_boost_down">Lower volume boost</string>
+  <string name="sound_cd_boost_up">Raise volume boost</string>
+  <string name="sound_cd_preset_previous">Previous equalizer preset</string>
+  <string name="sound_cd_preset_next">Next equalizer preset</string>
+  <string name="sound_cd_turn_off">Turn off volume boost and equalizer</string>
+  <string name="sound_cd_toggle_boost">Volume boost. Tap to turn on or off</string>
+  <string name="sound_cd_toggle_equalizer">Equalizer. Tap to turn on or off</string>
+</resources>

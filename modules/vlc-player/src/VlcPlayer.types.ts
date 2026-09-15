@@ -178,6 +178,21 @@ export type MediaVolume = { current: number; max: number };
 
 export type PickedSubtitle = { uri: string; name: string };
 
+/** What the phone did with a request for one sound effect on the global audio output. */
+export type SoundEffectResult = {
+  ok: boolean;
+  enabled: boolean;
+  /** False when another app currently controls the global effects. */
+  hasControl?: boolean;
+  error?: string;
+};
+
+export type SoundEffectsStatus = { boost: SoundEffectResult; equalizer: SoundEffectResult };
+
+export type EqualizerInfo =
+  | { ok: true; centerHz: number[]; minMb: number; maxMb: number }
+  | { ok: false; error: string };
+
 export type VideoTrackInfo ={ id: number; codec: string; width: number; height: number; fps: number; bitrate: number };
 export type AudioTrackInfo = {
   id: number;
