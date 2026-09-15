@@ -8,8 +8,10 @@ import { Provider } from 'react-redux';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { initDatabase } from '@/db';
 import { SubtitleStyleSync } from '@/features/player/subtitle-style-sync';
+import { SoundEffectsSync } from '@/features/sound/sound-effects-sync';
 import { store } from '@/store';
 import { hydrateSettings, persistSettingsChanges } from '@/store/settings-persistence';
+import { hydrateSound } from '@/store/sound-persistence';
 import VlcPlayer from '@modules/vlc-player';
 
 SplashScreen.preventAutoHideAsync();
@@ -19,6 +21,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     VlcPlayer.warmUp().catch((error: unknown) => console.warn('[vlc] warm-up failed', error));
+    hydrateSound();
     initDatabase()
       .then(hydrateSettings)
       .catch((error: unknown) => console.warn('[db] init failed', error));
@@ -31,6 +34,7 @@ export default function RootLayout() {
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <AnimatedSplashOverlay />
           <SubtitleStyleSync />
+          <SoundEffectsSync />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="folder/[bucketId]" />

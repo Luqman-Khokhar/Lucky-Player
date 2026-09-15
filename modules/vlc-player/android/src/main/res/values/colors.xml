@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sound notification colors; values-night holds the dark versions. Accent matches the app's theme accent. -->
+<resources>
+  <color name="sound_notification_primary">#DE000000</color>
+  <color name="sound_notification_secondary">#8A000000</color>
+  <color name="sound_notification_accent">#0B6BCB</color>
+  <color name="sound_notification_track">#1F000000</color>
+</resources>

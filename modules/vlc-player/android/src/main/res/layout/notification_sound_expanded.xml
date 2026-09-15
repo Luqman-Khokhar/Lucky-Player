@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Expanded sound notification. Tapping a section header turns that effect on or off; the buttons below adjust it.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="vertical"
+  android:paddingTop="4dp">
+
+  <!-- Volume boost -->
+  <LinearLayout
+    android:id="@+id/boost_header"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:contentDescription="@string/sound_cd_toggle_boost"
+    android:gravity="center_vertical"
+    android:minHeight="40dp"
+    android:orientation="horizontal">
+
+    <TextView
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:text="@string/sound_volume_boost"
+      android:textColor="@color/sound_notification_primary"
+      android:textSize="14sp"
+      android:textStyle="bold" />
+
+    <TextView
+      android:id="@+id/boost_value"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:fontFeatureSettings="tnum"
+      android:textColor="@color/sound_notification_accent"
+      android:textSize="14sp"
+      android:textStyle="bold" />
+  </LinearLayout>
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <ImageButton
+      android:id="@+id/boost_down"
+      android:layout_width="48dp"
+      android:layout_height="48dp"
+      android:background="@android:color/transparent"
+      android:contentDescription="@string/sound_cd_boost_down"
+      android:src="@drawable/ic_sound_remove" />
+
+    <ProgressBar
+      android:id="@+id/boost_level"
+      style="@android:style/Widget.Material.ProgressBar.Horizontal"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_marginHorizontal="8dp"
+      android:layout_weight="1"
+      android:max="100"
+      android:progressBackgroundTint="@color/sound_notification_track"
+      android:progressTint="@color/sound_notification_accent" />
+
+    <ImageButton
+      android:id="@+id/boost_up"
+      android:layout_width="48dp"
+      android:layout_height="48dp"
+      android:background="@android:color/transparent"
+      android:contentDescription="@string/sound_cd_boost_up"
+      android:src="@drawable/ic_sound_add" />
+  </LinearLayout>
+
+  <TextView
+    android:id="@+id/boost_hint"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center"
+    android:textColor="@color/sound_notification_secondary"
+    android:textSize="12sp"
+    android:visibility="gone" />
+
+  <!-- Notifications only inflate allowed view classes; a plain View crashes, so dividers are ImageViews. -->
+  <ImageView
+    android:layout_width="match_parent"
+    android:layout_height="1dp"
+    android:layout_marginVertical="8dp"
+    android:background="@color/sound_notification_track"
+    android:importantForAccessibility="no" />
+
+  <!-- Equalizer -->
+  <LinearLayout
+    android:id="@+id/equalizer_header"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:contentDescription="@string/sound_cd_toggle_equalizer"
+    android:gravity="center_vertical"
+    android:minHeight="40dp"
+    android:orientation="horizontal">
+
+    <TextView
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:text="@string/sound_equalizer"
+      android:textColor="@color/sound_notification_primary"
+      android:textSize="14sp"
+      android:textStyle="bold" />
+
+    <TextView
+      android:id="@+id/preset_label"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:ellipsize="end"
+      android:maxLines="1"
+      android:textColor="@color/sound_notification_accent"
+      android:textSize="14sp"
+      android:textStyle="bold" />
+  </LinearLayout>
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <ImageButton
+      android:id="@+id/preset_previous"
+      android:layout_width="48dp"
+      android:layout_height="48dp"
+      android:background="@android:color/transparent"
+      android:contentDescription="@string/sound_cd_preset_previous"
+      android:src="@drawable/ic_sound_previous" />
+
+    <TextView
+      android:id="@+id/preset_position"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:gravity="center"
+      android:maxLines="1"
+      android:textColor="@color/sound_notification_secondary"
+      android:textSize="13sp" />
+
+    <ImageButton
+      android:id="@+id/preset_next"
+      android:layout_width="48dp"
+      android:layout_height="48dp"
+      android:background="@android:color/transparent"
+      android:contentDescription="@string/sound_cd_preset_next"
+      android:src="@drawable/ic_sound_next" />
+  </LinearLayout>
+
+  <!-- Footer -->
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="4dp"
+    android:gravity="end|center_vertical"
+    android:orientation="horizontal">
+
+    <Button
+      android:id="@+id/turn_off"
+      style="@android:style/Widget.Material.Button.Borderless.Small"
+      android:layout_width="wrap_content"
+      android:layout_height="48dp"
+      android:contentDescription="@string/sound_cd_turn_off"
+      android:drawableStart="@drawable/ic_sound_power"
+      android:drawablePadding="8dp"
+      android:text="@string/sound_turn_off"
+      android:textColor="@color/sound_notification_accent" />
+  </LinearLayout>
+</LinearLayout>

@@ -4,12 +4,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import libraryReducer from './library-slice';
 import playQueueReducer from './play-queue-slice';
 import settingsReducer from './settings-slice';
+import soundReducer from './sound-slice';
 
 export const store = configureStore({
   reducer: {
     settings: settingsReducer,
     library: libraryReducer,
     playQueue: playQueueReducer,
+    sound: soundReducer,
   },
 });
 

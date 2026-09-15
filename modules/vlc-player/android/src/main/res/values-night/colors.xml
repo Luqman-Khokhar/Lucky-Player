@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="sound_notification_primary">#FFFFFFFF</color>
+  <color name="sound_notification_secondary">#B3FFFFFF</color>
+  <color name="sound_notification_accent">#5EB1EF</color>
+  <color name="sound_notification_track">#33FFFFFF</color>
+</resources>

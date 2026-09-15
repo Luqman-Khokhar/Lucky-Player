@@ -13,16 +13,26 @@ import type { GestureHud } from './use-player-gestures';
 const LEVEL_BAR_WIDTH = 120;
 const LEVEL_BAR_HEIGHT = 4;
 
-function describe(hud: GestureHud): { icon: IconName; label: string; level?: number } {
+function describe(hud: GestureHud): { icon: IconName; label: string; level?: number; boost?: number } {
   switch (hud.kind) {
     case 'brightness':
       return { icon: 'brightness_medium', label: `${Math.round(hud.value * 100)}%`, level: hud.value };
-    case 'volume':
+    case 'volume': {
+      if (hud.value > 1) {
+        const boost = Math.round((hud.value - 1) * 100);
+        return {
+          icon: 'volume_up',
+          label: hud.limited ? `Boost +${boost}% · raise the limit in Sound settings` : `Boost +${boost}%`,
+          level: 1,
+          boost: hud.value - 1,
+        };
+      }
       return {
         icon: hud.value === 0 ? 'volume_off' : 'volume_up',
         label: `${Math.round(hud.value * 100)}%`,
         level: hud.value,
       };
+    }
     case 'zoom':
       return { icon: 'zoom_in', label: `Zoom ${Math.round(hud.value * 100)}%` };
     case 'seek': {
@@ -44,7 +54,7 @@ export function PlayerGestureHud({ hud }: { hud: GestureHud | null }) {
   const insets = useSafeAreaInsets();
 
   if (!hud) return null;
-  const { icon, label, level } = describe(hud);
+  const { icon, label, level, boost } = describe(hud);
 
   return (
     <Animated.View
@@ -62,6 +72,11 @@ export function PlayerGestureHud({ hud }: { hud: GestureHud | null }) {
       {level !== undefined ? (
         <View style={[styles.track, { backgroundColor: theme.playerTrack }]}>
           <View style={[styles.fill, { width: `${Math.round(level * 100)}%`, backgroundColor: theme.playerAccent }]} />
+          {boost !== undefined ? (
+            <View
+              style={[styles.fill, styles.boostFill, { width: `${Math.round(boost * 100)}%`, backgroundColor: theme.danger }]}
+            />
+          ) : null}
         </View>
       ) : null}
     </Animated.View>
@@ -94,5 +109,11 @@ const styles = StyleSheet.create({
   },
   fill: {
     height: '100%',
+  },
+  // Drawn over the full volume bar so the boosted share reads as extra.
+  boostFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
   },
 });

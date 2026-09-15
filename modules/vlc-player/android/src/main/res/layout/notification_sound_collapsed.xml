@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Collapsed sound notification: boost −/value/+ on the left, preset name with next and power on the right. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:gravity="center_vertical"
+  android:minHeight="48dp"
+  android:orientation="horizontal">
+
+  <ImageButton
+    android:id="@+id/boost_down"
+    android:layout_width="40dp"
+    android:layout_height="40dp"
+    android:background="@android:color/transparent"
+    android:contentDescription="@string/sound_cd_boost_down"
+    android:src="@drawable/ic_sound_remove" />
+
+  <TextView
+    android:id="@+id/boost_value"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:fontFeatureSettings="tnum"
+    android:gravity="center"
+    android:maxLines="1"
+    android:minWidth="52dp"
+    android:textColor="@color/sound_notification_primary"
+    android:textSize="15sp"
+    android:textStyle="bold" />
+
+  <ImageButton
+    android:id="@+id/boost_up"
+    android:layout_width="40dp"
+    android:layout_height="40dp"
+    android:background="@android:color/transparent"
+    android:contentDescription="@string/sound_cd_boost_up"
+    android:src="@drawable/ic_sound_add" />
+
+  <!-- Notifications only inflate allowed view classes; a plain View crashes, so dividers are ImageViews. -->
+  <ImageView
+    android:layout_width="1dp"
+    android:layout_height="24dp"
+    android:layout_marginStart="8dp"
+    android:layout_marginEnd="12dp"
+    android:background="@color/sound_notification_track"
+    android:importantForAccessibility="no" />
+
+  <TextView
+    android:id="@+id/preset_label"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:ellipsize="end"
+    android:maxLines="1"
+    android:textColor="@color/sound_notification_primary"
+    android:textSize="14sp" />
+
+  <ImageButton
+    android:id="@+id/preset_next"
+    android:layout_width="40dp"
+    android:layout_height="40dp"
+    android:background="@android:color/transparent"
+    android:contentDescription="@string/sound_cd_preset_next"
+    android:src="@drawable/ic_sound_next" />
+
+  <ImageButton
+    android:id="@+id/turn_off"
+    android:layout_width="40dp"
+    android:layout_height="40dp"
+    android:background="@android:color/transparent"
+    android:contentDescription="@string/sound_cd_turn_off"
+    android:src="@drawable/ic_sound_power" />
+</LinearLayout>

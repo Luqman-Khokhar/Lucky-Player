@@ -25,6 +25,16 @@ class VlcPlayerModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("VlcPlayer")
 
+    Events("onSoundSettingsChanged")
+
+    OnCreate {
+      SoundEffectsController.listener = { settings -> sendEvent("onSoundSettingsChanged", mapOf("settings" to settings)) }
+    }
+
+    OnDestroy {
+      SoundEffectsController.listener = null
+    }
+
     AsyncFunction("scanVideos") { promise: Promise ->
       val appContext = context
       scanExecutor.execute {
@@ -171,6 +181,18 @@ class VlcPlayerModule : Module() {
 
     AsyncFunction("warmUp") {
       VlcEngine.warmUp(context)
+    }
+
+    AsyncFunction("getEqualizerInfo") {
+      SystemAudioEffects.equalizerInfo()
+    }
+
+    AsyncFunction("getSoundSettings") {
+      SoundEffectsController.storedSettings(context)
+    }
+
+    AsyncFunction("updateSoundEffects") { requestJson: String ->
+      SoundEffectsController.update(context, requestJson)
     }
 
     AsyncFunction("configureSubtitles") { scale: Int, color: Int, background: Boolean ->
