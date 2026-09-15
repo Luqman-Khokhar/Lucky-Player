@@ -1,14 +1,10 @@
 package expo.modules.vlcplayer
 
 import android.app.Activity
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import expo.modules.kotlin.AppContext
@@ -45,7 +41,7 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   private val onDecoderFallback by EventDispatcher<Map<String, Any>>()
   private val onTracksChanged by EventDispatcher<Map<String, Any>>()
   private val onPictureInPictureChange by EventDispatcher<Map<String, Any>>()
-  private val onPictureInPictureAction by EventDispatcher<Map<String, Any>>()
+  private val onPlaybackControl by EventDispatcher<Map<String, Any>>()
 
   private val libVLC = VlcEngine.acquire(context)
   private val player = MediaPlayer(libVLC) // created on main so its events are delivered on main
@@ -60,6 +56,8 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   /** Subtitle file the user picked for this video; added on every load. */
   var externalSubtitle: String? = null
   var matchFrameRate = true
+  /** Step for picture-in-picture and headset skip buttons. */
+  var skipSeconds = 10
 
   private var loadedSource: String? = null
   private var paused = false
@@ -94,23 +92,58 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   // The resize into or out of picture-in-picture can land just before the activity reports the new mode.
   private val recheckPictureInPicture = Runnable { refreshPictureInPicture() }
 
-  // Buttons in the picture-in-picture window arrive as broadcasts from the system UI. They act on the player here
-  // so they work even when JS updates are slow while the app is in the background; JS only mirrors the result.
-  private val pictureInPictureControls = object : BroadcastReceiver() {
-    override fun onReceive(context: Context?, intent: Intent?) {
-      val control = intent?.getStringExtra(PictureInPicture.EXTRA_CONTROL) ?: return
-      Log.i(TAG, "Picture-in-picture control: $control")
-      when (control) {
-        PictureInPicture.CONTROL_TOGGLE -> {
-          setPaused(!paused)
-          appContext.currentActivity?.let { PictureInPicture.setPlayback(it, paused, PictureInPicture.skipSeconds) }
-        }
-        PictureInPicture.CONTROL_REWIND -> skipBy(-PictureInPicture.skipSeconds * 1000L)
-        PictureInPicture.CONTROL_FORWARD -> skipBy(PictureInPicture.skipSeconds * 1000L)
-        else -> return
+  // Audio never plays while the player is hidden. Every automatic pause, resume and button press is decided here,
+  // on the native side, so it works even when JS is slow in the background; JS only mirrors the result.
+  private var playbackHost: PlaybackHost? = null
+  private var mediaButtons: MediaButtons? = null
+  private val audioFocus = PlaybackAudioFocus(context) { change -> onAudioFocusChange(change) }
+  private var hostVisible = true
+  // Paused by a call, alarm or assistant; resumes when it ends if the player is still visible.
+  private var pausedForInterruption = false
+  // Media stopped while hidden (the video surface does not survive); reopened, paused, at this position when shown.
+  private var mediaReleased = false
+  private var reopenAtMs = 0L
+
+  // Set between the activity stopping and starting again.
+  private var activityStopped = false
+
+  private val hostListener = object : PlaybackHost.Listener {
+    // XOS stops and restarts the activity a few times while the picture-in-picture window opens. When that window
+    // is about to open, the stop only counts if it still holds shortly after and the window is not showing.
+    override fun onHostHidden() {
+      activityStopped = true
+      val activity = pictureInPictureActivity
+      if (activity != null && !paused && PictureInPicture.isAutoEnterArmed(activity)) {
+        removeCallbacks(confirmWindowHidden)
+        postDelayed(confirmWindowHidden, PICTURE_IN_PICTURE_HIDE_CONFIRM_MS)
+      } else {
+        hideNow("activity stopped")
       }
-      onPictureInPictureAction(mapOf("action" to control, "paused" to paused))
     }
+
+    override fun onHostShown() {
+      activityStopped = false
+      removeCallbacks(confirmWindowHidden)
+      if (hostVisible || released) return
+      Log.i(TAG, "Player shown")
+      hostVisible = true
+      mediaButtons?.setActive(true)
+      attachVideoSurface()
+      if (mediaReleased) reopenAfterHidden()
+    }
+
+    override fun onAudioMustStop() = stopAudioAutomatically("screen off or headphones disconnected")
+
+    override fun onPictureInPictureControl(control: String) = applyControl(control)
+  }
+
+  // A deferred hide (activity stopped or window hidden while picture-in-picture may be opening) acts only if the
+  // player is still hidden and picture-in-picture is not showing.
+  private val confirmWindowHidden = Runnable {
+    val activity = pictureInPictureActivity ?: return@Runnable
+    val stillHidden = activityStopped || windowVisibility != VISIBLE
+    if (!stillHidden || PictureInPicture.isActive(activity)) return@Runnable
+    hideNow(if (activityStopped) "activity stopped" else "window hidden")
   }
 
   // Touched on worker only.
@@ -151,10 +184,22 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     refreshPictureInPicture()
   }
 
+  // Backup for activity callbacks that arrive late; see [confirmWindowHidden].
+  override fun onWindowVisibilityChanged(visibility: Int) {
+    super.onWindowVisibilityChanged(visibility)
+    if (pictureInPictureActivity == null || released) return
+    removeCallbacks(confirmWindowHidden)
+    if (visibility == VISIBLE) {
+      hostListener.onHostShown()
+    } else {
+      postDelayed(confirmWindowHidden, WINDOW_HIDE_CONFIRM_MS)
+    }
+  }
+
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
     if (released) return
-    hookPictureInPicture()
+    hookHost()
     if (!viewsAttached) {
       player.attachViews(videoLayout, null, true, false)
       viewsAttached = true
@@ -184,8 +229,24 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     if (viewsAttached) load(startPositionMs) else pendingLoad = true
   }
 
+  /** JS prop. A value different from the player's state is the user's choice and ends any automatic resume. */
+  fun setPausedFromProps(value: Boolean?) {
+    val next = value ?: false
+    if (next == paused) return
+    Log.i(TAG, "JS set paused=$next")
+    pausedForInterruption = false
+    if (next) {
+      setPaused(true)
+      audioFocus.abandon()
+    } else {
+      play("user")
+    }
+  }
+
   fun setPaused(value: Boolean?) {
     paused = value ?: false
+    mediaButtons?.setPlaying(!paused)
+    pictureInPictureActivity?.let { PictureInPicture.setPlayback(it, paused, skipSeconds) }
     if (!loadEmitted) return
     val shouldPause = paused
     onWorker {
@@ -262,6 +323,128 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     onWorker { if (player.hasMedia()) player.setTime(target) }
   }
 
+  // region Playback safety (main thread)
+
+  /** Starts playback only while visible and with audio focus. Returns false and reports why when refused. */
+  private fun play(reason: String): Boolean {
+    Log.i(TAG, "Play requested by $reason (visible=$hostVisible)")
+    if (!hostVisible) {
+      setPaused(true)
+      emitControl(PlaybackControls.PAUSE)
+      return false
+    }
+    if (!audioFocus.request()) {
+      setPaused(true)
+      emitControl(PlaybackControls.BLOCKED)
+      return false
+    }
+    setPaused(false)
+    return true
+  }
+
+  private fun pauseAutomatically(reason: String) {
+    if (paused) return
+    Log.i(TAG, "Paused automatically: $reason")
+    setPaused(true)
+    emitControl(PlaybackControls.PAUSE)
+  }
+
+  private fun stopAudioAutomatically(reason: String) {
+    pausedForInterruption = false
+    pauseAutomatically(reason)
+    audioFocus.abandon()
+  }
+
+  /** Pauses, stops the media and lets go of the surface. The media reopens paused when the player is shown again. */
+  private fun hideNow(reason: String) {
+    removeCallbacks(confirmWindowHidden)
+    if (!hostVisible || released) return
+    Log.i(TAG, "Player hidden: $reason")
+    hostVisible = false
+    mediaButtons?.setActive(false)
+    stopAudioAutomatically("player hidden")
+    releaseMediaWhileHidden()
+    detachVideoSurface()
+  }
+
+  // A paused libVLC does not recover its video output after the surface is destroyed and recreated (audio returns,
+  // picture stays black), so the media is stopped here and reopened from the saved position instead.
+  private fun releaseMediaWhileHidden() {
+    if (mediaReleased || loadedSource == null) return
+    reopenAtMs = lastTimeMs.coerceAtLeast(0L)
+    Log.i(TAG, "Stopping media while hidden at $reopenAtMs ms")
+    mediaReleased = true
+    loadEmitted = false
+    generation++
+    onWorker {
+      player.stop()
+      closeDescriptor()
+    }
+  }
+
+  private fun reopenAfterHidden() {
+    mediaReleased = false
+    if (viewsAttached && source != null) load(reopenAtMs)
+  }
+
+  private fun detachVideoSurface() {
+    if (!viewsAttached) return
+    player.detachViews()
+    viewsAttached = false
+  }
+
+  private fun attachVideoSurface() {
+    if (viewsAttached) return
+    player.attachViews(videoLayout, null, true, false)
+    viewsAttached = true
+  }
+
+  private fun onAudioFocusChange(change: PlaybackAudioFocus.Change) {
+    if (released) return
+    Log.i(TAG, "Audio focus: $change")
+    when (change) {
+      PlaybackAudioFocus.Change.LOSS -> stopAudioAutomatically("another app took the audio")
+      PlaybackAudioFocus.Change.LOSS_TRANSIENT -> if (!paused) {
+        pauseAutomatically("call, alarm or assistant")
+        pausedForInterruption = true
+      }
+      PlaybackAudioFocus.Change.GAIN -> if (pausedForInterruption) {
+        pausedForInterruption = false
+        if (hostVisible && play("interruption ended")) emitControl(PlaybackControls.PLAY)
+      }
+    }
+  }
+
+  /** Picture-in-picture window buttons and headset or Bluetooth buttons. */
+  private fun applyControl(control: String) {
+    if (released) return
+    Log.i(TAG, "Playback control: $control")
+    when (control) {
+      PlaybackControls.TOGGLE -> if (paused) userPlay() else userPause()
+      PlaybackControls.PLAY -> if (paused) userPlay()
+      PlaybackControls.PAUSE -> if (!paused) userPause()
+      PlaybackControls.REWIND -> skipBy(-skipSeconds * 1000L)
+      PlaybackControls.FORWARD -> skipBy(skipSeconds * 1000L)
+      else -> return
+    }
+    emitControl(control)
+  }
+
+  private fun userPlay() {
+    pausedForInterruption = false
+    play("button")
+  }
+
+  private fun userPause() {
+    pausedForInterruption = false
+    setPaused(true)
+    audioFocus.abandon()
+  }
+
+  private fun emitControl(action: String) = onPlaybackControl(mapOf("action" to action, "paused" to paused))
+
+  // endregion
+
   private fun skipBy(deltaMs: Long) {
     onWorker {
       if (!player.hasMedia()) return@onWorker
@@ -288,7 +471,8 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     if (released) return
     released = true
     generation++
-    unhookPictureInPicture()
+    unhookHost()
+    audioFocus.abandon()
     mainHandler.removeCallbacksAndMessages(null)
     player.setEventListener(null)
     if (viewsAttached) player.detachViews()
@@ -313,6 +497,13 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     lastTimeMs = startAtMs
     lastProgressMs = -1L
     transitioning = true
+    if (!paused && !(hostVisible && audioFocus.request())) {
+      paused = true
+      mediaButtons?.setPlaying(false)
+      emitControl(if (hostVisible) PlaybackControls.BLOCKED else PlaybackControls.PAUSE)
+    }
+    // libVLC has to start playing before it can be paused; a paused load stays muted until the pause lands.
+    val startPaused = paused
     val gen = ++generation
     val useHw = usingHw
     val appContext = context.applicationContext
@@ -340,6 +531,7 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
       if (startAtMs > 0) opened.media.addOption(":start-time=${startAtMs / 1000.0}")
       player.setMedia(opened.media)
       opened.media.release()
+      if (startPaused) player.setVolume(0)
       player.play()
       postIfCurrent(gen) { transitioning = false }
     }
@@ -436,28 +628,26 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   }
 
   // A view created while already in picture-in-picture (auto-play next) reports the current mode right away.
-  private fun hookPictureInPicture() {
+  private fun hookHost() {
     if (pictureInPictureActivity != null) return
     val activity = appContext.currentActivity ?: return
-    val filter = IntentFilter(PictureInPicture.ACTION_CONTROL)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      activity.registerReceiver(pictureInPictureControls, filter, Context.RECEIVER_NOT_EXPORTED)
-    } else {
-      @Suppress("UnspecifiedRegisterReceiverFlag")
-      activity.registerReceiver(pictureInPictureControls, filter)
-    }
     pictureInPictureActivity = activity
+    playbackHost = PlaybackHost(activity, hostListener).also { it.start() }
+    mediaButtons = MediaButtons(activity) { control -> applyControl(control) }.also {
+      it.setPlaying(!paused)
+      it.setActive(hostVisible)
+    }
     refreshPictureInPicture()
   }
 
-  private fun unhookPictureInPicture() {
-    val activity = pictureInPictureActivity ?: return
+  private fun unhookHost() {
     pictureInPictureActivity = null
     removeCallbacks(recheckPictureInPicture)
-    try {
-      activity.unregisterReceiver(pictureInPictureControls)
-    } catch (_: IllegalArgumentException) {
-    }
+    removeCallbacks(confirmWindowHidden)
+    playbackHost?.stop()
+    playbackHost = null
+    mediaButtons?.release()
+    mediaButtons = null
   }
 
   private fun refreshPictureInPicture() {
@@ -493,13 +683,14 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   // region Worker-only helpers
 
   private fun applyPlaybackSettings(settings: PlaybackSettings) {
+    // Pause before restoring the volume so a paused load never makes a sound.
+    if (settings.paused && player.isPlaying) player.pause()
     player.setRate(settings.rate)
     player.setVolume(settings.volume)
     player.setAudioDelay(settings.audioDelayMs * 1000)
     player.setSpuDelay(settings.subtitleDelayMs * 1000)
     settings.audioTrackId?.let { player.setAudioTrack(it) }
     settings.subtitleTrackId?.let { player.setSpuTrack(it) }
-    if (settings.paused && player.isPlaying) player.pause()
   }
 
   private fun addSubtitleFiles(appContext: Context, request: SubtitleRequest) {
@@ -581,6 +772,8 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     private const val WORKER_CALL_TIMEOUT_S = 5L
     private const val MAX_ZOOM = 4f
     private const val PICTURE_IN_PICTURE_RECHECK_MS = 400L
+    private const val WINDOW_HIDE_CONFIRM_MS = 400L
+    private const val PICTURE_IN_PICTURE_HIDE_CONFIRM_MS = 800L
     private const val TRACK_TYPE_VIDEO = 1 // libvlc_track_video
 
     // Events from the media being torn down; ignore them while a new one is loading.

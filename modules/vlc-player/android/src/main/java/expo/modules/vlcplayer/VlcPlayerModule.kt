@@ -235,14 +235,15 @@ class VlcPlayerModule : Module() {
         "onDecoderFallback",
         "onTracksChanged",
         "onPictureInPictureChange",
-        "onPictureInPictureAction"
+        "onPlaybackControl"
       )
 
       Prop("source") { view: VlcPlayerView, source: String? -> view.source = source }
       Prop("startPosition") { view: VlcPlayerView, ms: Double? -> view.startPositionMs = ms?.toLong() ?: 0L }
       Prop("externalSubtitle") { view: VlcPlayerView, uri: String? -> view.externalSubtitle = uri }
       Prop("matchFrameRate") { view: VlcPlayerView, enabled: Boolean? -> view.matchFrameRate = enabled ?: true }
-      Prop("paused") { view: VlcPlayerView, paused: Boolean? -> view.setPaused(paused) }
+      Prop("skipSeconds") { view: VlcPlayerView, seconds: Int? -> view.skipSeconds = seconds ?: 10 }
+      Prop("paused") { view: VlcPlayerView, paused: Boolean? -> view.setPausedFromProps(paused) }
       Prop("rate") { view: VlcPlayerView, rate: Float? -> view.setRate(rate) }
       Prop("volume") { view: VlcPlayerView, volume: Int? -> view.setVolume(volume) }
       Prop("aspect") { view: VlcPlayerView, aspect: String? -> view.setAspect(aspect) }

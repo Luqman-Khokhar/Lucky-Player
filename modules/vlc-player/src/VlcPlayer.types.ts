@@ -26,8 +26,15 @@ export type LoadEventPayload = {
 };
 
 export type PictureInPictureEventPayload = { active: boolean };
-/** The player already applied the action; `paused` is its state afterwards. */
-export type PictureInPictureActionEventPayload = { action: 'rewind' | 'toggle' | 'forward'; paused: boolean };
+/**
+ * The native player already applied the action; `paused` is its state afterwards. Sources: picture-in-picture and
+ * headset buttons (toggle, play, pause, rewind, forward), automatic pauses and resumes (pause, play), and a refused
+ * play while another app holds audio focus (blocked).
+ */
+export type PlaybackControlEventPayload = {
+  action: 'toggle' | 'play' | 'pause' | 'rewind' | 'forward' | 'blocked';
+  paused: boolean;
+};
 
 export type ProgressEventPayload = { position: number; duration: number };
 export type BufferingEventPayload = { percent: number };
@@ -54,6 +61,8 @@ export type VlcPlayerViewProps = {
   externalSubtitle?: string;
   /** Switch the display to a refresh rate that is a whole multiple of the frame rate. Default true */
   matchFrameRate?: boolean;
+  /** Skip step for picture-in-picture and headset buttons. Default 10 */
+  skipSeconds?: number;
   paused?: boolean;
   /** 0.25 – 4 */
   rate?: number;
@@ -79,8 +88,8 @@ export type VlcPlayerViewProps = {
   onDecoderFallback?: NativeEventHandler<DecoderFallbackEventPayload>;
   onTracksChanged?: NativeEventHandler<PlayerTracks>;
   onPictureInPictureChange?: NativeEventHandler<PictureInPictureEventPayload>;
-  /** A button in the picture-in-picture window was pressed. */
-  onPictureInPictureAction?: NativeEventHandler<PictureInPictureActionEventPayload>;
+  /** The native player changed playback on its own; mirror `paused` from it. */
+  onPlaybackControl?: NativeEventHandler<PlaybackControlEventPayload>;
   style?: StyleProp<ViewStyle>;
 };
 

@@ -92,7 +92,6 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     height: media?.height ?? 0,
     skipSeconds: settings.seekStepSec,
     onClosed: () => setPaused(true),
-    onPausedChange: setPaused,
   });
 
   const onLoad: Handler<'onLoad'> = ({ nativeEvent }) => {
@@ -124,6 +123,11 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     setNotice(`Hardware decoder failed${nativeEvent.codec ? ` for ${nativeEvent.codec}` : ''}. Switched to software.`);
   };
   const onError: Handler<'onError'> = ({ nativeEvent }) => setError(nativeEvent);
+  // Skips need no mirroring: the next progress event carries the new position.
+  const onPlaybackControl: Handler<'onPlaybackControl'> = ({ nativeEvent }) => {
+    setPaused(nativeEvent.paused);
+    if (nativeEvent.action === 'blocked') setNotice("Can't play right now: a call or another app is using the audio.");
+  };
 
   const enterPictureInPicture = async () => {
     if (await pictureInPicture.enter()) return;
@@ -198,6 +202,7 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
           startPosition: prepared.startPosition,
           externalSubtitle: activeExternalSubtitle,
           matchFrameRate: settings.matchFrameRate,
+          skipSeconds: settings.seekStepSec,
           paused,
           rate: boosted ? BOOST_RATE : speed,
           aspect,
@@ -215,7 +220,7 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
           onDecoderFallback,
           onError,
           onPictureInPictureChange: pictureInPicture.onChange,
-          onPictureInPictureAction: pictureInPicture.onAction,
+          onPlaybackControl,
         }
       : null;
 
