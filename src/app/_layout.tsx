@@ -9,6 +9,7 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { initDatabase } from '@/db';
 import { store } from '@/store';
 import { hydrateSettings, persistSettingsChanges } from '@/store/settings-persistence';
+import VlcPlayer from '@modules/vlc-player';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -16,6 +17,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
+    VlcPlayer.warmUp().catch((error: unknown) => console.warn('[vlc] warm-up failed', error));
     initDatabase()
       .then(hydrateSettings)
       .catch((error: unknown) => console.warn('[db] init failed', error));

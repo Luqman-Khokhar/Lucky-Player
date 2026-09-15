@@ -135,12 +135,32 @@ class VlcPlayerModule : Module() {
       promise.resolve(VideoPicker.describe(context, uri, persisted))
     }
 
+    AsyncFunction("warmUp") {
+      VlcEngine.warmUp(context)
+    }
+
     AsyncFunction("getDeviceProfile") {
       DeviceProfiler.profile(context)
     }
 
     AsyncFunction("getMediaInfo") { uri: String ->
       MediaProbe.probe(context, uri)
+    }
+
+    AsyncFunction("getBrightness") {
+      SystemControls.getBrightness(appContext.throwingActivity)
+    }
+
+    AsyncFunction("setBrightness") { value: Double ->
+      SystemControls.setBrightness(appContext.throwingActivity, value)
+    }
+
+    AsyncFunction("getMediaVolume") {
+      SystemControls.getVolume(context)
+    }
+
+    AsyncFunction("setMediaVolume") { index: Int ->
+      SystemControls.setVolume(context, index)
     }
 
     View(VlcPlayerView::class) {
@@ -161,6 +181,7 @@ class VlcPlayerModule : Module() {
       Prop("rate") { view: VlcPlayerView, rate: Float? -> view.setRate(rate) }
       Prop("volume") { view: VlcPlayerView, volume: Int? -> view.setVolume(volume) }
       Prop("aspect") { view: VlcPlayerView, aspect: String? -> view.setAspect(aspect) }
+      Prop("zoom") { view: VlcPlayerView, zoom: Float? -> view.setZoom(zoom) }
       Prop("hwDecoding") { view: VlcPlayerView, mode: String? -> view.setHwMode(mode) }
       Prop("audioTrack") { view: VlcPlayerView, id: Int? -> view.setAudioTrack(id) }
       Prop("subtitleTrack") { view: VlcPlayerView, id: Int? -> view.setSubtitleTrack(id) }

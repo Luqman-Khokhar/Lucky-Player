@@ -4,6 +4,7 @@ import type {
   DeviceProfile,
   FolderVideo,
   MediaInfo,
+  MediaVolume,
   PickedFolder,
   PickedVideo,
   ScannedVideo,
@@ -23,8 +24,17 @@ declare class VlcPlayerModule extends NativeModule {
   releaseFolder(treeUri: string): Promise<void>;
   /** Resolves null when the user cancels. */
   pickVideo(): Promise<PickedVideo | null>;
+  /** Starts libVLC in the background so the first video opens quickly. Resolves immediately. */
+  warmUp(): Promise<void>;
   getDeviceProfile(): Promise<DeviceProfile>;
   getMediaInfo(uri: string): Promise<MediaInfo>;
+  /** Window brightness 0..1, or the system brightness when the window does not override it. */
+  getBrightness(): Promise<number>;
+  /** 0..1 for this window only; a negative value restores the system brightness. */
+  setBrightness(value: number): Promise<void>;
+  /** Media stream volume as a step index. */
+  getMediaVolume(): Promise<MediaVolume>;
+  setMediaVolume(index: number): Promise<void>;
 }
 
 export default requireNativeModule<VlcPlayerModule>('VlcPlayer');

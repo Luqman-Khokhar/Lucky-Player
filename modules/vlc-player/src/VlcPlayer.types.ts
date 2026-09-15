@@ -50,6 +50,8 @@ export type VlcPlayerViewProps = {
   /** 0 – 200 */
   volume?: number;
   aspect?: AspectMode;
+  /** 1 – 4, scales the video around its center */
+  zoom?: number;
   hwDecoding?: HwDecodingMode;
   audioTrack?: number;
   /** -1 disables subtitles */
@@ -149,6 +151,8 @@ export type PickedVideo = {
   /** false when Android refused a persistable grant; resume after restart then relies on READ_MEDIA_VIDEO */
   persisted: boolean;
 };
+
+export type MediaVolume = { current: number; max: number };
 
 export type VideoTrackInfo ={ id: number; codec: string; width: number; height: number; fps: number; bitrate: number };
 export type AudioTrackInfo = {
