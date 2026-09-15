@@ -1,5 +1,4 @@
 import { FlashList } from '@shopify/flash-list';
-import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -18,6 +17,7 @@ import { PermissionGate } from './permission-gate';
 import { SortChips, type SortOption } from './sort-chips';
 import { useLibraryActions } from './use-library-actions';
 import { useLibraryQuery } from './use-library-query';
+import { usePlayVideo } from './use-play-video';
 import { VideoRow } from './video-row';
 
 const SEARCH_DEBOUNCE_MS = 200;
@@ -38,7 +38,7 @@ type VideoListScreenProps = {
 };
 
 export function VideoListScreen({ title, bucketId, onBack, allowFavoritesFilter = false }: VideoListScreenProps) {
-  const router = useRouter();
+  const playVideo = usePlayVideo();
   const scanning = useAppSelector((state) => state.library.scanStatus === 'scanning');
   const { rescan, toggleFavorite } = useLibraryActions();
   const [search, setSearch] = useState('');
@@ -50,10 +50,7 @@ export function VideoListScreen({ title, bucketId, onBack, allowFavoritesFilter 
   const query = { bucketId, favoritesOnly, search: term, sort, direction };
   const videos = useLibraryQuery(`videos:${JSON.stringify(query)}`, () => listVideos(query));
 
-  const play = useCallback(
-    (video: LibraryVideo) => router.push({ pathname: '/player', params: { uri: video.uri, title: video.name } }),
-    [router]
-  );
+  const play = useCallback((video: LibraryVideo) => playVideo(video, videos.data ?? []), [playVideo, videos.data]);
 
   const subtitle = videos.data
     ? `${formatCount(videos.data.length, 'video')}${term ? ` matching “${term}”` : ''}`

@@ -10,7 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 import { PlayerGestureHud } from './player-gesture-hud';
 import { usePlayerGestures } from './use-player-gestures';
-import { useSystemControls } from './use-system-controls';
+import type { SystemControls } from './use-system-controls';
 
 const FEEDBACK_SIZE = 104;
 
@@ -18,6 +18,7 @@ type PlayerGestureLayerProps = {
   locked: boolean;
   skipMs: number;
   zoom: number;
+  system: SystemControls;
   getProgress: () => { position: number; duration: number };
   onToggleControls: () => void;
   onSkip: (deltaMs: number) => void;
@@ -29,9 +30,8 @@ type PlayerGestureLayerProps = {
 /** Full-screen touch surface for the player; see usePlayerGestures for the gesture map. */
 export function PlayerGestureLayer(props: PlayerGestureLayerProps) {
   const theme = useTheme();
-  const system = useSystemControls();
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const { gesture, hud, feedback } = usePlayerGestures({ ...props, ...size, system });
+  const { gesture, hud, feedback } = usePlayerGestures({ ...props, ...size });
 
   return (
     <>

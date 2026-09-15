@@ -6,12 +6,18 @@ import { Spacing } from '@/constants/theme';
 import { DECODER_OPTIONS } from '@/features/player/player-options';
 import { useTheme } from '@/hooks/use-theme';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { SEEK_STEP_CHOICES, setHwDecoding, setResumePlayback, setSeekStep } from '@/store/settings-slice';
+import {
+  SEEK_STEP_CHOICES,
+  setAutoPlayNext,
+  setHwDecoding,
+  setResumePlayback,
+  setSeekStep,
+} from '@/store/settings-slice';
 
 export function PlaybackSettingsSection() {
   const theme = useTheme();
   const dispatch = useAppDispatch();
-  const { hwDecoding, resumePlayback, seekStepSec } = useAppSelector((state) => state.settings);
+  const { hwDecoding, resumePlayback, seekStepSec, autoPlayNext } = useAppSelector((state) => state.settings);
   const decoder = DECODER_OPTIONS.find((option) => option.value === hwDecoding);
 
   return (
@@ -68,6 +74,23 @@ export function PlaybackSettingsSection() {
             dispatch(setResumePlayback(value));
           }}
           accessibilityLabel="Resume where you left off"
+          trackColor={{ false: theme.backgroundSelected, true: theme.accent }}
+        />
+      </View>
+
+      <View style={styles.switchRow}>
+        <View style={styles.switchText}>
+          <ThemedText type="small">Play next video automatically</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            When a video ends, start the next one from the same list.
+          </ThemedText>
+        </View>
+        <Switch
+          value={autoPlayNext}
+          onValueChange={(value) => {
+            dispatch(setAutoPlayNext(value));
+          }}
+          accessibilityLabel="Play next video automatically"
           trackColor={{ false: theme.backgroundSelected, true: theme.accent }}
         />
       </View>

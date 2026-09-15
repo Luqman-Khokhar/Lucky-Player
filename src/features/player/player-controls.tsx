@@ -29,7 +29,13 @@ export type PlayerControlsProps = {
   position: number;
   duration: number;
   skipMs: number;
+  hasPrevious: boolean;
+  hasNext: boolean;
+  rotationLocked: boolean;
   onBack: () => void;
+  onPrevious: () => void;
+  onNext: () => void;
+  onToggleRotation: () => void;
   onTogglePlay: () => void;
   onSkip: (deltaMs: number) => void;
   onSeek: (positionMs: number) => void;
@@ -102,6 +108,12 @@ export function PlayerControls(props: PlayerControlsProps) {
                 </ThemedText>
               ) : null}
             </View>
+            <IconButton
+              icon={props.rotationLocked ? 'screen_lock_rotation' : 'screen_rotation'}
+              label={props.rotationLocked ? 'Unlock rotation' : 'Lock rotation'}
+              {...colors}
+              onPress={withInteraction(props.onToggleRotation)}
+            />
             <IconButton icon="lock" label="Lock controls" {...colors} onPress={withInteraction(props.onToggleLock)} />
             <IconButton icon="settings" label="Settings" {...colors} onPress={props.onOpenSettings} />
           </View>
@@ -133,14 +145,30 @@ export function PlayerControls(props: PlayerControlsProps) {
             />
           </View>
 
-          <View style={[styles.bar, styles.bottomBar, { backgroundColor: theme.playerScrim }]}>
+          <View style={[styles.bottomPanel, { backgroundColor: theme.playerScrim }]}>
             <ThemedText type="small" style={[styles.time, { color: theme.playerText }]}>
               {formatTime(position)}
+              <ThemedText type="small" style={{ color: theme.playerTextSecondary }}>
+                {` / ${formatTime(duration)}`}
+              </ThemedText>
             </ThemedText>
-            <SeekBar position={position} duration={duration} skipMs={skipMs} onSeek={props.onSeek} onScrub={onInteraction} />
-            <ThemedText type="small" style={[styles.time, { color: theme.playerTextSecondary }]}>
-              {formatTime(duration)}
-            </ThemedText>
+            <View style={styles.seekRow}>
+              <IconButton
+                icon="skip_previous"
+                label="Previous video"
+                disabled={!props.hasPrevious}
+                {...colors}
+                onPress={withInteraction(props.onPrevious)}
+              />
+              <SeekBar position={position} duration={duration} skipMs={skipMs} onSeek={props.onSeek} onScrub={onInteraction} />
+              <IconButton
+                icon="skip_next"
+                label="Next video"
+                disabled={!props.hasNext}
+                {...colors}
+                onPress={withInteraction(props.onNext)}
+              />
+            </View>
           </View>
         </>
       )}
@@ -160,9 +188,17 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.one,
     borderRadius: Spacing.five,
   },
-  bottomBar: {
-    gap: Spacing.three,
-    paddingHorizontal: Spacing.four,
+  bottomPanel: {
+    gap: Spacing.half,
+    paddingHorizontal: Spacing.two,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.one,
+    borderRadius: Spacing.four,
+  },
+  seekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
   titleBlock: {
     flex: 1,
@@ -178,8 +214,7 @@ const styles = StyleSheet.create({
     gap: Spacing.five,
   },
   time: {
-    minWidth: 44,
-    textAlign: 'center',
+    paddingHorizontal: Spacing.three,
     fontVariant: ['tabular-nums'],
   },
   locked: {

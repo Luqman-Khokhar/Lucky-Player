@@ -14,6 +14,7 @@ function parseSettings(value: unknown): Partial<SettingsState> {
     result.hwDecoding = input.hwDecoding;
   }
   if (typeof input.resumePlayback === 'boolean') result.resumePlayback = input.resumePlayback;
+  if (typeof input.autoPlayNext === 'boolean') result.autoPlayNext = input.autoPlayNext;
   if (SEEK_STEP_CHOICES.some((choice) => choice === input.seekStepSec)) result.seekStepSec = input.seekStepSec as number;
   return result;
 }

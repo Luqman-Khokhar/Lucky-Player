@@ -1,10 +1,43 @@
 import { getDatabase } from './connection';
 
-export type SavedPlayback = { position: number; duration: number };
+/** Per-video picks restored the next time the video opens. Null tracks mean the file's default. */
+export type PlaybackChoices = {
+  audioTrack: number | null;
+  subtitleTrack: number | null;
+  audioDelay: number;
+  subtitleDelay: number;
+};
+
+export type SavedPlayback = { position: number; duration: number } & PlaybackChoices;
+
+const CHOICE_COLUMNS: Record<keyof PlaybackChoices, string> = {
+  audioTrack: 'audio_track',
+  subtitleTrack: 'subtitle_track',
+  audioDelay: 'audio_delay',
+  subtitleDelay: 'subtitle_delay',
+};
 
 export async function getPlaybackState(uri: string): Promise<SavedPlayback | null> {
   const db = await getDatabase();
-  return db.getFirstAsync<SavedPlayback>('SELECT position, duration FROM playback_state WHERE uri = ?', [uri]);
+  return db.getFirstAsync<SavedPlayback>(
+    `SELECT position, duration, audio_track AS audioTrack, subtitle_track AS subtitleTrack,
+            audio_delay AS audioDelay, subtitle_delay AS subtitleDelay
+     FROM playback_state WHERE uri = ?`,
+    [uri]
+  );
+}
+
+/** Saves the given picks only; creates the row when the video has no saved position yet. */
+export async function savePlaybackChoices(uri: string, choices: Partial<PlaybackChoices>): Promise<void> {
+  const keys = (Object.keys(CHOICE_COLUMNS) as (keyof PlaybackChoices)[]).filter((key) => choices[key] !== undefined);
+  if (keys.length === 0) return;
+  const columns = keys.map((key) => CHOICE_COLUMNS[key]);
+  const db = await getDatabase();
+  await db.runAsync(
+    `INSERT INTO playback_state (uri, updated_at, ${columns.join(', ')}) VALUES (?, ?, ${columns.map(() => '?').join(', ')})
+     ON CONFLICT(uri) DO UPDATE SET ${columns.map((column) => `${column} = excluded.${column}`).join(', ')}`,
+    [uri, Date.now(), ...keys.map((key) => choices[key] ?? null)]
+  );
 }
 
 export async function savePlaybackState(uri: string, position: number, duration: number): Promise<void> {

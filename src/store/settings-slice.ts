@@ -10,6 +10,7 @@ export type SettingsState = {
   defaultAspect: AspectMode;
   seekStepSec: number;
   resumePlayback: boolean;
+  autoPlayNext: boolean;
 };
 
 const initialState: SettingsState = {
@@ -17,6 +18,7 @@ const initialState: SettingsState = {
   defaultAspect: 'fit',
   seekStepSec: 10,
   resumePlayback: true,
+  autoPlayNext: true,
 };
 
 const settingsSlice = createSlice({
@@ -38,9 +40,12 @@ const settingsSlice = createSlice({
     setResumePlayback(state, action: PayloadAction<boolean>) {
       state.resumePlayback = action.payload;
     },
+    setAutoPlayNext(state, action: PayloadAction<boolean>) {
+      state.autoPlayNext = action.payload;
+    },
   },
 });
 
-export const { settingsHydrated, setHwDecoding, setDefaultAspect, setSeekStep, setResumePlayback } =
+export const { settingsHydrated, setHwDecoding, setDefaultAspect, setSeekStep, setResumePlayback, setAutoPlayNext } =
   settingsSlice.actions;
 export default settingsSlice.reducer;

@@ -21,9 +21,9 @@ type MediaSummary = { codec: string; width: number; height: number; hardware: bo
 type Handler<K extends keyof VlcPlayerViewProps> = NonNullable<VlcPlayerViewProps[K]>;
 
 /** Owns playback state for one video and exposes native view props plus user actions. */
-export function usePlayerController(uri: string | undefined) {
+export function usePlayerController(uri: string | undefined, onEnded?: () => void) {
   const settings = useAppSelector((state) => state.settings);
-  const { prepared, progressRef, reportProgress, markEnded, rememberFallback, restartFromCurrent } =
+  const { prepared, progressRef, reportProgress, markEnded, rememberFallback, restartFromCurrent, saveChoices } =
     usePlaybackSession(uri, settings);
   const playerRef = useRef<VlcPlayerViewRef>(null);
 
@@ -40,12 +40,18 @@ export function usePlayerController(uri: string | undefined) {
   const [zoom, setZoom] = useState(1);
   const [boosted, setBoosted] = useState(false);
   const [hwOverride, setHwOverride] = useState<HwDecodingMode | null>(null);
-  const [audioDelay, setAudioDelay] = useState(0);
-  const [subtitleDelay, setSubtitleDelay] = useState(0);
+  // Null until the user changes it; the video's remembered value applies meanwhile.
+  const [audioDelayOverride, setAudioDelay] = useState<number | null>(null);
+  const [subtitleDelayOverride, setSubtitleDelay] = useState<number | null>(null);
   const [error, setError] = useState<ErrorEventPayload | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const hwMode = hwOverride ?? prepared?.hwMode ?? settings.hwDecoding;
+  const remembered = prepared?.choices;
+  const activeAudioTrack = audioTrack ?? remembered?.audioTrack ?? undefined;
+  const activeSubtitleTrack = subtitleTrack ?? remembered?.subtitleTrack ?? undefined;
+  const audioDelay = audioDelayOverride ?? remembered?.audioDelay ?? 0;
+  const subtitleDelay = subtitleDelayOverride ?? remembered?.subtitleDelay ?? 0;
 
   useEffect(() => {
     if (!notice) return;
@@ -95,6 +101,7 @@ export function usePlayerController(uri: string | undefined) {
   const onEnd: Handler<'onEnd'> = () => {
     markEnded();
     setPaused(true);
+    onEnded?.();
   };
   const onDecoderFallback: Handler<'onDecoderFallback'> = ({ nativeEvent }) => {
     rememberFallback(nativeEvent);
@@ -107,10 +114,12 @@ export function usePlayerController(uri: string | undefined) {
     selectAudio: (id) => {
       setAudioTrack(id);
       setTracks((current) => current && { ...current, selectedAudio: id });
+      saveChoices({ audioTrack: id });
     },
     selectSubtitle: (id) => {
       setSubtitleTrack(id);
       setTracks((current) => current && { ...current, selectedSubtitle: id });
+      saveChoices({ subtitleTrack: id });
     },
     selectSpeed: setSpeed,
     selectAspect: (mode) => {
@@ -118,8 +127,14 @@ export function usePlayerController(uri: string | undefined) {
       setZoom(1);
     },
     selectDecoder: setHwOverride,
-    changeAudioDelay: setAudioDelay,
-    changeSubtitleDelay: setSubtitleDelay,
+    changeAudioDelay: (ms) => {
+      setAudioDelay(ms);
+      saveChoices({ audioDelay: ms });
+    },
+    changeSubtitleDelay: (ms) => {
+      setSubtitleDelay(ms);
+      saveChoices({ subtitleDelay: ms });
+    },
   };
 
   const settingsValues: PlayerSettingsValues = {
@@ -142,8 +157,8 @@ export function usePlayerController(uri: string | undefined) {
           aspect,
           zoom,
           hwDecoding: hwMode,
-          audioTrack,
-          subtitleTrack,
+          audioTrack: activeAudioTrack,
+          subtitleTrack: activeSubtitleTrack,
           audioDelay,
           subtitleDelay,
           onLoad,
