@@ -62,6 +62,10 @@ object PictureInPicture {
   fun isActive(activity: Activity): Boolean =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && activity.isInPictureInPictureMode
 
+  /** True when leaving the app right now would open picture-in-picture instead of hiding the player. */
+  fun isAutoEnterArmed(context: Context): Boolean =
+    autoEnter && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && isAllowed(context)
+
   fun enter(activity: Activity, width: Int, height: Int): Boolean {
     if (!isAllowed(activity)) return false
     rememberSize(width, height)
