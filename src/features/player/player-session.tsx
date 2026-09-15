@@ -46,7 +46,8 @@ export function PlayerSession(props: PlayerSessionProps) {
   const [lastInteraction, setLastInteraction] = useState(0);
 
   const ended = state.playbackState === 'ended';
-  const showControls = !settingsOpen && !state.error && (controlsVisible || ended);
+  const inPictureInPicture = player.pictureInPicture.active;
+  const showControls = !settingsOpen && !state.error && !inPictureInPicture && (controlsVisible || ended);
 
   useEffect(() => {
     if (!showControls || state.paused || state.playbackState !== 'playing') return;
@@ -69,7 +70,12 @@ export function PlayerSession(props: PlayerSessionProps) {
 
   const { media } = state;
   const subtitle = media
-    ? [media.codec.toUpperCase(), media.height ? `${media.height}p` : '', media.hardware ? 'HW' : 'SW']
+    ? [
+        media.codec.toUpperCase(),
+        media.height ? `${media.height}p` : '',
+        media.frameRate > 0 ? `${Math.round(media.frameRate)} fps` : '',
+        media.hardware ? 'HW' : 'SW',
+      ]
         .filter(Boolean)
         .join(' · ')
     : '';
@@ -119,6 +125,8 @@ export function PlayerSession(props: PlayerSessionProps) {
         hasPrevious={onPrevious !== undefined}
         hasNext={onNext !== undefined}
         rotationLocked={props.rotationLocked}
+        pictureInPictureSupported={player.pictureInPicture.supported}
+        onPictureInPicture={player.pictureInPicture.enter}
         onBack={onBack}
         onPrevious={playPrevious}
         onNext={() => onNext?.()}
@@ -131,13 +139,13 @@ export function PlayerSession(props: PlayerSessionProps) {
         onInteraction={markInteraction}
       />
 
-      <PlayerNotice message={state.notice} />
+      <PlayerNotice message={inPictureInPicture ? null : state.notice} />
 
       {state.error ? <PlayerErrorPanel error={state.error} onRetry={player.retry} onBack={onBack} /> : null}
 
       <SettingsSheet
         key={`settings-${sheetSession}`}
-        open={settingsOpen}
+        open={settingsOpen && !inPictureInPicture}
         values={state.settingsValues}
         actions={player.settingsActions}
         onClose={closeSettings}

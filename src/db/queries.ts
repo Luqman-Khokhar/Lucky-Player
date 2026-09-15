@@ -1,3 +1,5 @@
+import type { HwDecodingMode } from '@modules/vlc-player';
+
 import { getDatabase } from './connection';
 
 /** Per-video picks restored the next time the video opens. Null tracks mean the file's default. */
@@ -6,6 +8,10 @@ export type PlaybackChoices = {
   subtitleTrack: number | null;
   audioDelay: number;
   subtitleDelay: number;
+  /** Null follows the app-wide decoder setting. */
+  hwMode: HwDecodingMode | null;
+  /** Subtitle file the user loaded for this video. */
+  subtitleUri: string | null;
 };
 
 export type SavedPlayback = { position: number; duration: number } & PlaybackChoices;
@@ -15,13 +21,15 @@ const CHOICE_COLUMNS: Record<keyof PlaybackChoices, string> = {
   subtitleTrack: 'subtitle_track',
   audioDelay: 'audio_delay',
   subtitleDelay: 'subtitle_delay',
+  hwMode: 'hw_mode',
+  subtitleUri: 'subtitle_uri',
 };
 
 export async function getPlaybackState(uri: string): Promise<SavedPlayback | null> {
   const db = await getDatabase();
   return db.getFirstAsync<SavedPlayback>(
     `SELECT position, duration, audio_track AS audioTrack, subtitle_track AS subtitleTrack,
-            audio_delay AS audioDelay, subtitle_delay AS subtitleDelay
+            audio_delay AS audioDelay, subtitle_delay AS subtitleDelay, hw_mode AS hwMode, subtitle_uri AS subtitleUri
      FROM playback_state WHERE uri = ?`,
     [uri]
   );

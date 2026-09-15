@@ -14,7 +14,15 @@ const SAVE_INTERVAL_MS = 5000;
 const RESUME_MIN_MS = 5000;
 const RESUME_END_GUARD_MS = 10000;
 
-const NO_CHOICES: PlaybackChoices = { audioTrack: null, subtitleTrack: null, audioDelay: 0, subtitleDelay: 0 };
+const NO_CHOICES: PlaybackChoices = {
+  audioTrack: null,
+  subtitleTrack: null,
+  audioDelay: 0,
+  subtitleDelay: 0,
+  hwMode: null,
+  subtitleUri: null,
+};
+const HW_MODES: readonly (HwDecodingMode | null)[] = ['auto', 'hw', 'sw'];
 
 export type PreparedSession = { startPosition: number; hwMode: HwDecodingMode; choices: PlaybackChoices };
 
@@ -53,9 +61,12 @@ export function usePlaybackSession(uri: string | undefined, { hwDecoding, resume
             subtitleTrack: saved.subtitleTrack,
             audioDelay: saved.audioDelay,
             subtitleDelay: saved.subtitleDelay,
+            hwMode: HW_MODES.includes(saved.hwMode) ? saved.hwMode : null,
+            subtitleUri: saved.subtitleUri,
           }
         : NO_CHOICES;
-      setPrepared({ startPosition: resumeAt, hwMode: knownBad ? 'sw' : hwDecoding, choices });
+      // A decoder picked for this video wins over the app default and the failed-codec list.
+      setPrepared({ startPosition: resumeAt, hwMode: choices.hwMode ?? (knownBad ? 'sw' : hwDecoding), choices });
     })();
     return () => {
       cancelled = true;

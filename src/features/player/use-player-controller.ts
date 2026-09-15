@@ -1,23 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAppSelector } from '@/store';
-import type {
-  AspectMode,
-  ErrorEventPayload,
-  HwDecodingMode,
-  PlaybackState,
-  PlayerTracks,
-  VlcPlayerViewProps,
-  VlcPlayerViewRef,
+import VlcPlayer, {
+  type AspectMode,
+  type ErrorEventPayload,
+  type HwDecodingMode,
+  type PlaybackState,
+  type PlayerTracks,
+  type VlcPlayerViewProps,
+  type VlcPlayerViewRef,
 } from '@modules/vlc-player';
 
 import type { PlayerSettingsActions, PlayerSettingsValues } from './settings-sheet/settings-types';
+import { usePictureInPicture } from './use-picture-in-picture';
 import { usePlaybackSession } from './use-playback-session';
 
 const NOTICE_MS = 4000;
 const BOOST_RATE = 2;
 
-type MediaSummary = { codec: string; width: number; height: number; hardware: boolean };
+type MediaSummary = { codec: string; width: number; height: number; frameRate: number; hardware: boolean };
 type Handler<K extends keyof VlcPlayerViewProps> = NonNullable<VlcPlayerViewProps[K]>;
 
 /** Owns playback state for one video and exposes native view props plus user actions. */
@@ -45,11 +46,14 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
   const [subtitleDelayOverride, setSubtitleDelay] = useState<number | null>(null);
   const [error, setError] = useState<ErrorEventPayload | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [externalSubtitle, setExternalSubtitle] = useState<string | null>(null);
 
   const hwMode = hwOverride ?? prepared?.hwMode ?? settings.hwDecoding;
   const remembered = prepared?.choices;
   const activeAudioTrack = audioTrack ?? remembered?.audioTrack ?? undefined;
-  const activeSubtitleTrack = subtitleTrack ?? remembered?.subtitleTrack ?? undefined;
+  // A subtitle file loaded in this session replaces the remembered track choice.
+  const activeSubtitleTrack = externalSubtitle ? subtitleTrack : (subtitleTrack ?? remembered?.subtitleTrack ?? undefined);
+  const activeExternalSubtitle = externalSubtitle ?? remembered?.subtitleUri ?? undefined;
   const audioDelay = audioDelayOverride ?? remembered?.audioDelay ?? 0;
   const subtitleDelay = subtitleDelayOverride ?? remembered?.subtitleDelay ?? 0;
 
@@ -81,12 +85,24 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     setAttempt((value) => value + 1);
   }, [restartFromCurrent]);
 
+  const pictureInPicture = usePictureInPicture({
+    playing: playbackState === 'playing' && !paused,
+    paused,
+    width: media?.width ?? 0,
+    height: media?.height ?? 0,
+    skipSeconds: settings.seekStepSec,
+    onClosed: () => setPaused(true),
+    onTogglePlay: togglePlay,
+    onSkip: skip,
+  });
+
   const onLoad: Handler<'onLoad'> = ({ nativeEvent }) => {
     setTracks(nativeEvent.tracks);
     setMedia({
       codec: nativeEvent.videoCodec,
       width: nativeEvent.width,
       height: nativeEvent.height,
+      frameRate: nativeEvent.frameRate,
       hardware: nativeEvent.hardwareDecoding,
     });
     reportProgress(progressRef.current.position, nativeEvent.duration);
@@ -110,6 +126,30 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
   };
   const onError: Handler<'onError'> = ({ nativeEvent }) => setError(nativeEvent);
 
+  const enterPictureInPicture = async () => {
+    if (await pictureInPicture.enter()) return;
+    setNotice('Picture-in-picture is turned off for this app. Turn it on in the settings screen that opened.');
+    VlcPlayer.openPictureInPictureSettings().catch(() => undefined);
+  };
+
+  const loadSubtitleFile = async () => {
+    try {
+      const picked = await VlcPlayer.pickSubtitle();
+      if (!picked) return;
+      const added = (await playerRef.current?.addSubtitle(picked.uri)) ?? false;
+      if (!added) {
+        setNotice(`Couldn't load ${picked.name}. Check that it is a subtitle file.`);
+        return;
+      }
+      setExternalSubtitle(picked.uri);
+      setSubtitleTrack(undefined);
+      saveChoices({ subtitleUri: picked.uri, subtitleTrack: null });
+      setNotice(`Loaded ${picked.name}`);
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : 'Could not open the file picker.');
+    }
+  };
+
   const settingsActions: PlayerSettingsActions = {
     selectAudio: (id) => {
       setAudioTrack(id);
@@ -126,7 +166,10 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
       setAspect(mode);
       setZoom(1);
     },
-    selectDecoder: setHwOverride,
+    selectDecoder: (mode) => {
+      setHwOverride(mode);
+      saveChoices({ hwMode: mode });
+    },
     changeAudioDelay: (ms) => {
       setAudioDelay(ms);
       saveChoices({ audioDelay: ms });
@@ -135,6 +178,7 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
       setSubtitleDelay(ms);
       saveChoices({ subtitleDelay: ms });
     },
+    loadSubtitleFile,
   };
 
   const settingsValues: PlayerSettingsValues = {
@@ -143,6 +187,7 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     aspect,
     hwMode,
     hardwareDecoding: media?.hardware ?? hwMode !== 'sw',
+    codec: media?.codec ?? '',
     audioDelay,
     subtitleDelay,
   };
@@ -152,6 +197,8 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
       ? {
           source: uri,
           startPosition: prepared.startPosition,
+          externalSubtitle: activeExternalSubtitle,
+          matchFrameRate: settings.matchFrameRate,
           paused,
           rate: boosted ? BOOST_RATE : speed,
           aspect,
@@ -168,6 +215,8 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
           onEnd,
           onDecoderFallback,
           onError,
+          onPictureInPictureChange: pictureInPicture.onChange,
+          onPictureInPictureAction: pictureInPicture.onAction,
         }
       : null;
 
@@ -185,5 +234,10 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     togglePlay,
     retry,
     settingsActions,
+    pictureInPicture: {
+      supported: pictureInPicture.supported,
+      active: pictureInPicture.active,
+      enter: enterPictureInPicture,
+    },
   };
 }

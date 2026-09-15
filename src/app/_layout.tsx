@@ -7,6 +7,7 @@ import { Provider } from 'react-redux';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { initDatabase } from '@/db';
+import { SubtitleStyleSync } from '@/features/player/subtitle-style-sync';
 import { store } from '@/store';
 import { hydrateSettings, persistSettingsChanges } from '@/store/settings-persistence';
 import VlcPlayer from '@modules/vlc-player';
@@ -29,6 +30,7 @@ export default function RootLayout() {
       <Provider store={store}>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <AnimatedSplashOverlay />
+          <SubtitleStyleSync />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="folder/[bucketId]" />

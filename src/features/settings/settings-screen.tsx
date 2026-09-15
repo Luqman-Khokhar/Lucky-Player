@@ -12,6 +12,7 @@ import { FolderSourcesSection } from './folder-sources-section';
 import { LibrarySettingsSection } from './library-settings-section';
 import { PlaybackSettingsSection } from './playback-settings-section';
 import { SettingsRow, SettingsSection } from './settings-section';
+import { SubtitleSettingsSection } from './subtitle-settings-section';
 
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -24,6 +25,7 @@ export function SettingsScreen() {
           <LibrarySettingsSection />
           <FolderSourcesSection />
           <PlaybackSettingsSection />
+          <SubtitleSettingsSection />
           <DeviceProfileCard />
           <SettingsSection title="About">
             <SettingsRow label="Version" value={Constants.expoConfig?.version ?? 'Unknown'} />

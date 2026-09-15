@@ -32,6 +32,8 @@ export type PlayerControlsProps = {
   hasPrevious: boolean;
   hasNext: boolean;
   rotationLocked: boolean;
+  pictureInPictureSupported: boolean;
+  onPictureInPicture: () => void;
   onBack: () => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -108,6 +110,14 @@ export function PlayerControls(props: PlayerControlsProps) {
                 </ThemedText>
               ) : null}
             </View>
+            {props.pictureInPictureSupported ? (
+              <IconButton
+                icon="picture_in_picture_alt"
+                label="Picture-in-picture"
+                {...colors}
+                onPress={props.onPictureInPicture}
+              />
+            ) : null}
             <IconButton
               icon={props.rotationLocked ? 'screen_lock_rotation' : 'screen_rotation'}
               label={props.rotationLocked ? 'Unlock rotation' : 'Lock rotation'}

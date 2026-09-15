@@ -9,6 +9,8 @@ export type PlayerSettingsValues = {
   hwMode: HwDecodingMode;
   /** Decoder actually running, which can differ from hwMode after an automatic fallback. */
   hardwareDecoding: boolean;
+  /** Video codec reported by libVLC, empty before the video loads. */
+  codec: string;
   audioDelay: number;
   subtitleDelay: number;
 };
@@ -21,4 +23,5 @@ export type PlayerSettingsActions = {
   selectDecoder: (mode: HwDecodingMode) => void;
   changeAudioDelay: (ms: number) => void;
   changeSubtitleDelay: (ms: number) => void;
+  loadSubtitleFile: () => void;
 };

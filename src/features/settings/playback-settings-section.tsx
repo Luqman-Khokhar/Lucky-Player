@@ -10,6 +10,7 @@ import {
   SEEK_STEP_CHOICES,
   setAutoPlayNext,
   setHwDecoding,
+  setMatchFrameRate,
   setResumePlayback,
   setSeekStep,
 } from '@/store/settings-slice';
@@ -17,7 +18,9 @@ import {
 export function PlaybackSettingsSection() {
   const theme = useTheme();
   const dispatch = useAppDispatch();
-  const { hwDecoding, resumePlayback, seekStepSec, autoPlayNext } = useAppSelector((state) => state.settings);
+  const { hwDecoding, resumePlayback, seekStepSec, autoPlayNext, matchFrameRate } = useAppSelector(
+    (state) => state.settings
+  );
   const decoder = DECODER_OPTIONS.find((option) => option.value === hwDecoding);
 
   return (
@@ -91,6 +94,23 @@ export function PlaybackSettingsSection() {
             dispatch(setAutoPlayNext(value));
           }}
           accessibilityLabel="Play next video automatically"
+          trackColor={{ false: theme.backgroundSelected, true: theme.accent }}
+        />
+      </View>
+
+      <View style={styles.switchRow}>
+        <View style={styles.switchText}>
+          <ThemedText type="small">Match screen refresh rate</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Switches the screen to suit the video, such as 120 Hz for 24 fps films, so motion looks smooth.
+          </ThemedText>
+        </View>
+        <Switch
+          value={matchFrameRate}
+          onValueChange={(value) => {
+            dispatch(setMatchFrameRate(value));
+          }}
+          accessibilityLabel="Match screen refresh rate"
           trackColor={{ false: theme.backgroundSelected, true: theme.accent }}
         />
       </View>

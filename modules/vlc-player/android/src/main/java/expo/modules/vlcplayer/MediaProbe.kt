@@ -3,6 +3,7 @@ package expo.modules.vlcplayer
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.interfaces.IMedia
 import java.io.IOException
 
@@ -11,8 +12,16 @@ object MediaProbe {
   private const val TAG = "MediaProbe"
 
   fun probe(context: Context, uri: String): Map<String, Any> {
+    val libVLC = VlcEngine.acquire(context)
+    return try {
+      probeWith(context, libVLC, uri)
+    } finally {
+      VlcEngine.release(libVLC)
+    }
+  }
+
+  private fun probeWith(context: Context, libVLC: LibVLC, uri: String): Map<String, Any> {
     val startedAt = SystemClock.elapsedRealtime()
-    val libVLC = VlcEngine.get(context)
     val opened = VlcEngine.openMedia(context, libVLC, uri)
     try {
       val media = opened.media

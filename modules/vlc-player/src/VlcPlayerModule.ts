@@ -6,6 +6,7 @@ import type {
   MediaInfo,
   MediaVolume,
   PickedFolder,
+  PickedSubtitle,
   PickedVideo,
   ScannedVideo,
 } from './VlcPlayer.types';
@@ -26,6 +27,18 @@ declare class VlcPlayerModule extends NativeModule {
   pickVideo(): Promise<PickedVideo | null>;
   /** Starts libVLC in the background so the first video opens quickly. Resolves immediately. */
   warmUp(): Promise<void>;
+  /** Resolves null when the user cancels. The read grant is persisted so the file reloads next time. */
+  pickSubtitle(): Promise<PickedSubtitle | null>;
+  /** Size in percent and RGB color; applies to videos opened afterwards. */
+  configureSubtitles(scale: number, color: number, background: boolean): Promise<void>;
+  isPictureInPictureSupported(): boolean;
+  /** False when the system refused, usually because picture-in-picture is turned off for the app. */
+  enterPictureInPicture(width: number, height: number): Promise<boolean>;
+  /** Android 12+: shrink into picture-in-picture when the user leaves the app. */
+  setAutoPictureInPicture(enabled: boolean, width: number, height: number): Promise<void>;
+  /** Updates the play/pause button and skip labels shown in the picture-in-picture window. */
+  setPictureInPicturePlayback(paused: boolean, skipSeconds: number): Promise<void>;
+  openPictureInPictureSettings(): Promise<void>;
   getDeviceProfile(): Promise<DeviceProfile>;
   getMediaInfo(uri: string): Promise<MediaInfo>;
   /** Window brightness 0..1, or the system brightness when the window does not override it. */

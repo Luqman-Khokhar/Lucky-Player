@@ -15,6 +15,7 @@ class VlcPlayerModule : Module() {
 
   private var pendingPick: Promise? = null
   private var pendingFolderPick: Promise? = null
+  private var pendingSubtitlePick: Promise? = null
 
   private val scanExecutor = Executors.newSingleThreadExecutor()
 
@@ -110,7 +111,40 @@ class VlcPlayerModule : Module() {
       }
     }
 
+    AsyncFunction("pickSubtitle") { promise: Promise ->
+      if (pendingSubtitlePick != null) {
+        promise.reject("ERR_PICK_IN_PROGRESS", "A file picker is already open", null)
+        return@AsyncFunction
+      }
+      val activity = appContext.throwingActivity
+      pendingSubtitlePick = promise
+      val launched = SubtitleFinder.createPickerIntents().any { intent ->
+        try {
+          activity.startActivityForResult(intent, SubtitleFinder.REQUEST_CODE)
+          true
+        } catch (_: ActivityNotFoundException) {
+          false
+        }
+      }
+      if (!launched) {
+        pendingSubtitlePick = null
+        promise.reject("ERR_NO_PICKER", "No file picker app is available on this device", null)
+      }
+    }
+
     OnActivityResult { _, (requestCode, resultCode, intent) ->
+      if (requestCode == SubtitleFinder.REQUEST_CODE) {
+        val subtitlePromise = pendingSubtitlePick ?: return@OnActivityResult
+        pendingSubtitlePick = null
+        val uri = intent?.data
+        if (resultCode != Activity.RESULT_OK || uri == null) {
+          subtitlePromise.resolve(null)
+        } else {
+          val persisted = VideoPicker.persistReadAccess(context, uri)
+          subtitlePromise.resolve(VideoPicker.describe(context, uri, persisted))
+        }
+        return@OnActivityResult
+      }
       if (requestCode == FolderSources.REQUEST_CODE) {
         val folderPromise = pendingFolderPick ?: return@OnActivityResult
         pendingFolderPick = null
@@ -137,6 +171,33 @@ class VlcPlayerModule : Module() {
 
     AsyncFunction("warmUp") {
       VlcEngine.warmUp(context)
+    }
+
+    AsyncFunction("configureSubtitles") { scale: Int, color: Int, background: Boolean ->
+      VlcEngine.configureSubtitles(context, scale, color, background)
+    }
+
+    Function("isPictureInPictureSupported") {
+      PictureInPicture.isSupported(context)
+    }
+
+    AsyncFunction("enterPictureInPicture") { width: Int, height: Int, promise: Promise ->
+      val activity = appContext.throwingActivity
+      activity.runOnUiThread { promise.resolve(PictureInPicture.enter(activity, width, height)) }
+    }
+
+    AsyncFunction("setAutoPictureInPicture") { enabled: Boolean, width: Int, height: Int ->
+      val activity = appContext.currentActivity ?: return@AsyncFunction
+      activity.runOnUiThread { PictureInPicture.setAutoEnter(activity, enabled, width, height) }
+    }
+
+    AsyncFunction("setPictureInPicturePlayback") { paused: Boolean, skipSeconds: Int ->
+      val activity = appContext.currentActivity ?: return@AsyncFunction
+      activity.runOnUiThread { PictureInPicture.setPlayback(activity, paused, skipSeconds) }
+    }
+
+    AsyncFunction("openPictureInPictureSettings") {
+      PictureInPicture.openSettings(context)
     }
 
     AsyncFunction("getDeviceProfile") {
@@ -172,11 +233,15 @@ class VlcPlayerModule : Module() {
         "onEnd",
         "onError",
         "onDecoderFallback",
-        "onTracksChanged"
+        "onTracksChanged",
+        "onPictureInPictureChange",
+        "onPictureInPictureAction"
       )
 
       Prop("source") { view: VlcPlayerView, source: String? -> view.source = source }
       Prop("startPosition") { view: VlcPlayerView, ms: Double? -> view.startPositionMs = ms?.toLong() ?: 0L }
+      Prop("externalSubtitle") { view: VlcPlayerView, uri: String? -> view.externalSubtitle = uri }
+      Prop("matchFrameRate") { view: VlcPlayerView, enabled: Boolean? -> view.matchFrameRate = enabled ?: true }
       Prop("paused") { view: VlcPlayerView, paused: Boolean? -> view.setPaused(paused) }
       Prop("rate") { view: VlcPlayerView, rate: Float? -> view.setRate(rate) }
       Prop("volume") { view: VlcPlayerView, volume: Int? -> view.setVolume(volume) }

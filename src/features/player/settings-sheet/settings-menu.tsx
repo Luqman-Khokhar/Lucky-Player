@@ -19,7 +19,8 @@ function withDelay(label: string, delayMs: number): string {
 
 export function SettingsMenu({ values, onOpen }: SettingsMenuProps) {
   const { tracks } = values;
-  const decoder = `${labelFor(DECODER_OPTIONS, values.hwMode)} · ${values.hardwareDecoding ? 'HW' : 'SW'} active`;
+  const codec = values.codec ? ` · ${values.codec.toUpperCase()}` : '';
+  const decoder = `${labelFor(DECODER_OPTIONS, values.hwMode)} · ${values.hardwareDecoding ? 'HW' : 'SW'} active${codec}`;
 
   return (
     <View style={styles.list}>
