@@ -7,6 +7,7 @@ import { Provider } from 'react-redux';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { initDatabase } from '@/db';
+import { CastSync } from '@/features/cast/cast-sync';
 import { SubtitleStyleSync } from '@/features/player/subtitle-style-sync';
 import { SoundEffectsSync } from '@/features/sound/sound-effects-sync';
 import { store } from '@/store';
@@ -35,10 +36,12 @@ export default function RootLayout() {
           <AnimatedSplashOverlay />
           <SubtitleStyleSync />
           <SoundEffectsSync />
+          <CastSync />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="folder/[bucketId]" />
             <Stack.Screen name="player" options={{ animation: 'fade' }} />
+            <Stack.Screen name="cast" />
           </Stack>
         </ThemeProvider>
       </Provider>

@@ -22,4 +22,15 @@
   <string name="sound_cd_turn_off">Turn off volume boost and equalizer</string>
   <string name="sound_cd_toggle_boost">Volume boost. Tap to turn on or off</string>
   <string name="sound_cd_toggle_equalizer">Equalizer. Tap to turn on or off</string>
+
+  <string name="cast_notification_channel">Casting</string>
+  <string name="cast_notification_channel_description">Shows while Lucky Player is casting to a laptop, with a button to stop.</string>
+  <string name="cast_notification_waiting">Ready to cast</string>
+  <plurals name="cast_notification_connected">
+    <item quantity="one">Casting to %d laptop</item>
+    <item quantity="other">Casting to %d laptops</item>
+  </plurals>
+  <string name="cast_notification_address">Open %1$s on your laptop · code %2$s</string>
+  <string name="cast_notification_no_network">Waiting for Wi-Fi or hotspot</string>
+  <string name="cast_stop">Stop</string>
 </resources>

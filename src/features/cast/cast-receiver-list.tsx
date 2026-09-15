@@ -1,0 +1,76 @@
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import type { CastReceiver } from '@modules/vlc-player';
+
+type CastReceiverListProps = {
+  receivers: CastReceiver[];
+  onForgetLaptops: () => void;
+};
+
+/** Laptops connected right now, or a waiting hint while there are none. */
+export function CastReceiverList({ receivers, onForgetLaptops }: CastReceiverListProps) {
+  const theme = useTheme();
+
+  return (
+    <ThemedView type="backgroundElement" style={styles.card}>
+      <ThemedText type="smallBold" accessibilityRole="header">
+        Laptops
+      </ThemedText>
+
+      {receivers.length === 0 ? (
+        <View style={styles.row} accessibilityLiveRegion="polite">
+          <ActivityIndicator color={theme.accent} accessibilityLabel="Waiting for a laptop" />
+          <ThemedText type="small" themeColor="textSecondary" style={styles.text}>
+            Waiting for a laptop. Open the address above in its browser and it shows up here.
+          </ThemedText>
+        </View>
+      ) : (
+        <View style={styles.list} accessibilityLiveRegion="polite">
+          {receivers.map((receiver) => (
+            <View key={receiver.id} style={styles.row} accessible accessibilityLabel={`${receiver.name}, connected`}>
+              <Icon name="laptop" color={theme.text} />
+              <View style={styles.text}>
+                <ThemedText type="smallBold">{receiver.name}</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  Connected
+                </ThemedText>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <Button
+        label="Forget paired laptops"
+        variant="secondary"
+        onPress={onForgetLaptops}
+        accessibilityHint="Every laptop has to enter the code again"
+      />
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    gap: Spacing.three,
+  },
+  list: {
+    gap: Spacing.three,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  text: {
+    flex: 1,
+  },
+});

@@ -1,6 +1,7 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
 import type {
+  CastState,
   DeviceProfile,
   FolderVideo,
   MediaInfo,
@@ -16,6 +17,8 @@ import type {
 type VlcPlayerModuleEvents = {
   /** A notification button changed the sound settings; `settings` is the saved settings as JSON. */
   onSoundSettingsChanged: (event: { settings: string }) => void;
+  /** Casting started or stopped, a laptop connected or left, the address or code changed. */
+  onCastStateChanged: (event: { state: CastState }) => void;
 };
 
 declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
@@ -64,6 +67,16 @@ declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
   /** Media stream volume as a step index. */
   getMediaVolume(): Promise<MediaVolume>;
   setMediaVolume(index: number): Promise<void>;
+  /**
+   * Starts the laptop receiver server and the casting notification. Resolves the state with address and code.
+   * Rejects with ERR_NO_NETWORK without Wi-Fi or hotspot, ERR_CAST_SERVER when no port could be opened.
+   */
+  startCast(): Promise<CastState>;
+  /** Tells connected laptops casting stopped, closes the server and removes the notification. */
+  stopCast(): Promise<void>;
+  getCastState(): Promise<CastState>;
+  /** Every laptop must enter the code again; connected laptops are disconnected. */
+  forgetCastReceivers(): Promise<void>;
 }
 
 export default requireNativeModule<VlcPlayerModule>('VlcPlayer');

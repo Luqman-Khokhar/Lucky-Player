@@ -8,6 +8,7 @@ import { ScreenHeader } from '@/components/ui/screen-header';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { DeviceProfileCard } from '@/features/diagnostics/device-profile-card';
 
+import { CastSettingsSection } from './cast-settings-section';
 import { FolderSourcesSection } from './folder-sources-section';
 import { LibrarySettingsSection } from './library-settings-section';
 import { PlaybackSettingsSection } from './playback-settings-section';
@@ -28,6 +29,7 @@ export function SettingsScreen() {
           <PlaybackSettingsSection />
           <SubtitleSettingsSection />
           <SoundSettingsSection />
+          <CastSettingsSection />
           <DeviceProfileCard />
           <SettingsSection title="About">
             <SettingsRow label="Version" value={Constants.expoConfig?.version ?? 'Unknown'} />

@@ -204,6 +204,30 @@ export type AudioTrackInfo = {
 };
 export type SubtitleTrackInfo = { id: number; codec: string; language: string; description: string };
 
+/** How a laptop reaches the phone: the same Wi-Fi, the phone's hotspot, or another local network. */
+export type CastNetworkKind = 'wifi' | 'hotspot' | 'lan';
+
+/** A laptop browser that opened the receiver page and paired. */
+export type CastReceiver = {
+  id: string;
+  /** e.g. "Chrome · Linux" */
+  name: string;
+  browser: string;
+  os: string;
+  /** Epoch milliseconds */
+  connectedAt: number;
+};
+
+export type CastState = {
+  running: boolean;
+  /** http://<phone IP>:<port>; null while stopped or while the phone has no Wi-Fi or hotspot address */
+  address: string | null;
+  network: CastNetworkKind | null;
+  /** 4-digit code a new laptop enters once; null while stopped. Renewed after many wrong guesses. */
+  code: string | null;
+  receivers: CastReceiver[];
+};
+
 export type MediaInfo = {
   duration: number;
   video: VideoTrackInfo[];

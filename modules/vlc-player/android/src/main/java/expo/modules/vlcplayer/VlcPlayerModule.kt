@@ -7,6 +7,8 @@ import android.net.Uri
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.vlcplayer.cast.CastSession
+import java.io.IOException
 import java.util.concurrent.Executors
 
 class VlcPlayerModule : Module() {
@@ -22,17 +24,47 @@ class VlcPlayerModule : Module() {
   // Two decoders at most: keeps MediaTek chips responsive while the list scrolls.
   private val thumbnailExecutor = Executors.newFixedThreadPool(2)
 
+  // Starting the server binds a socket; kept off the JS and main threads.
+  private val castExecutor = Executors.newSingleThreadExecutor()
+
   override fun definition() = ModuleDefinition {
     Name("VlcPlayer")
 
-    Events("onSoundSettingsChanged")
+    Events("onSoundSettingsChanged", "onCastStateChanged")
 
     OnCreate {
       SoundEffectsController.listener = { settings -> sendEvent("onSoundSettingsChanged", mapOf("settings" to settings)) }
+      CastSession.listener = { state -> sendEvent("onCastStateChanged", mapOf("state" to state)) }
     }
 
     OnDestroy {
       SoundEffectsController.listener = null
+      CastSession.listener = null
+    }
+
+    AsyncFunction("startCast") { promise: Promise ->
+      val appContext = context
+      castExecutor.execute {
+        try {
+          promise.resolve(CastSession.start(appContext))
+        } catch (e: CastSession.NoNetworkException) {
+          promise.reject("ERR_NO_NETWORK", "Connect the phone to Wi-Fi or turn on its hotspot", e)
+        } catch (e: IOException) {
+          promise.reject("ERR_CAST_SERVER", e.message ?: "Could not start casting", e)
+        }
+      }
+    }
+
+    AsyncFunction("stopCast") {
+      CastSession.stop(context)
+    }
+
+    AsyncFunction("getCastState") {
+      CastSession.snapshot()
+    }
+
+    AsyncFunction("forgetCastReceivers") {
+      CastSession.forgetReceivers(context)
     }
 
     AsyncFunction("scanVideos") { promise: Promise ->
