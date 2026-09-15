@@ -1,14 +1,28 @@
+import Constants from 'expo-constants';
 import { Image } from 'expo-image';
 import * as SplashScreen from 'expo-splash-screen';
 import { useState } from 'react';
 import { Dimensions, StyleSheet, View } from 'react-native';
 import Animated, { Easing, Keyframe } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
+
+import { ThemedText } from '@/components/themed-text';
+import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 const INITIAL_SCALE_FACTOR = Dimensions.get('screen').height / 90;
 const DURATION = 600;
+// Keeps the app name and version readable before the splash fades out.
+const SPLASH_HOLD_MS = 900;
+// Same as imageWidth of the native splash in app.json, so the logo does not jump at the handover.
+const SPLASH_LOGO_SIZE = 160;
+const APP_VERSION = Constants.expoConfig?.version;
 
+/** Takes over from the native splash with the same logo, shows the app name and version, then fades out. */
 export function AnimatedSplashOverlay() {
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [animate, setAnimate] = useState(false);
   const [visible, setVisible] = useState(true);
 
@@ -33,18 +47,39 @@ export function AnimatedSplashOverlay() {
     },
   });
 
-  const image = <Image style={styles.image} source={require('@/assets/images/expo-logo.png')} />;
+  const overlayStyle = [styles.splashOverlay, { backgroundColor: theme.background }];
+  const content = (
+    <>
+      <Image
+        style={styles.splashLogo}
+        source={require('@/assets/images/splash-icon.png')}
+        contentFit="contain"
+        accessibilityLabel="Lucky Player"
+      />
+      <View style={[styles.splashFooter, { bottom: insets.bottom + Spacing.six }]}>
+        <ThemedText type="smallBold">Lucky Player</ThemedText>
+        {APP_VERSION ? (
+          <ThemedText type="small" themeColor="textSecondary">
+            {`Version ${APP_VERSION}`}
+          </ThemedText>
+        ) : null}
+      </View>
+    </>
+  );
 
   return animate ? (
     <Animated.View
-      entering={splashKeyframe.duration(DURATION).withCallback((finished) => {
-        'worklet';
-        if (finished) {
-          scheduleOnRN(setVisible, false);
-        }
-      })}
-      style={styles.splashOverlay}>
-      {image}
+      entering={splashKeyframe
+        .delay(SPLASH_HOLD_MS)
+        .duration(DURATION)
+        .withCallback((finished) => {
+          'worklet';
+          if (finished) {
+            scheduleOnRN(setVisible, false);
+          }
+        })}
+      style={overlayStyle}>
+      {content}
     </Animated.View>
   ) : (
     <View
@@ -53,8 +88,8 @@ export function AnimatedSplashOverlay() {
           setAnimate(true);
         });
       }}
-      style={styles.splashOverlay}>
-      {image}
+      style={overlayStyle}>
+      {content}
     </View>
   );
 }
@@ -140,9 +175,19 @@ const styles = StyleSheet.create({
   },
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#208AEF',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
+  },
+  splashLogo: {
+    width: SPLASH_LOGO_SIZE,
+    height: SPLASH_LOGO_SIZE,
+  },
+  splashFooter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    gap: Spacing.half,
   },
 });
