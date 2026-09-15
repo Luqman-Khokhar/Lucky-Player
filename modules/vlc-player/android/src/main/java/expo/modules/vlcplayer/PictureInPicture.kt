@@ -26,10 +26,11 @@ object PictureInPicture {
   const val ACTION_CONTROL = "expo.modules.vlcplayer.PICTURE_IN_PICTURE_CONTROL"
   const val EXTRA_CONTROL = "control"
 
+  const val CONTROL_REWIND = "rewind"
+  const val CONTROL_TOGGLE = "toggle"
+  const val CONTROL_FORWARD = "forward"
+
   private const val TAG = "PictureInPicture"
-  private const val CONTROL_REWIND = "rewind"
-  private const val CONTROL_TOGGLE = "toggle"
-  private const val CONTROL_FORWARD = "forward"
 
   // Android rejects aspect ratios beyond 2.39:1 in either direction.
   private const val MAX_RATIO = 2.38f
@@ -40,7 +41,10 @@ object PictureInPicture {
   private var height = 0
   private var autoEnter = false
   private var paused = false
-  private var skipSeconds = 10
+
+  /** Skip step shown on the window buttons, kept in sync with the app setting. */
+  var skipSeconds = 10
+    private set
 
   fun isSupported(context: Context): Boolean =
     Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&

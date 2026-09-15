@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
@@ -93,11 +94,22 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   // The resize into or out of picture-in-picture can land just before the activity reports the new mode.
   private val recheckPictureInPicture = Runnable { refreshPictureInPicture() }
 
-  // Buttons in the picture-in-picture window arrive as broadcasts from the system UI.
+  // Buttons in the picture-in-picture window arrive as broadcasts from the system UI. They act on the player here
+  // so they work even when JS updates are slow while the app is in the background; JS only mirrors the result.
   private val pictureInPictureControls = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
       val control = intent?.getStringExtra(PictureInPicture.EXTRA_CONTROL) ?: return
-      if (inPictureInPicture) onPictureInPictureAction(mapOf("action" to control))
+      Log.i(TAG, "Picture-in-picture control: $control")
+      when (control) {
+        PictureInPicture.CONTROL_TOGGLE -> {
+          setPaused(!paused)
+          appContext.currentActivity?.let { PictureInPicture.setPlayback(it, paused, PictureInPicture.skipSeconds) }
+        }
+        PictureInPicture.CONTROL_REWIND -> skipBy(-PictureInPicture.skipSeconds * 1000L)
+        PictureInPicture.CONTROL_FORWARD -> skipBy(PictureInPicture.skipSeconds * 1000L)
+        else -> return
+      }
+      onPictureInPictureAction(mapOf("action" to control, "paused" to paused))
     }
   }
 
@@ -248,6 +260,15 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   fun seek(positionMs: Long) {
     val target = positionMs.coerceAtLeast(0L)
     onWorker { if (player.hasMedia()) player.setTime(target) }
+  }
+
+  private fun skipBy(deltaMs: Long) {
+    onWorker {
+      if (!player.hasMedia()) return@onWorker
+      val length = player.length
+      val target = (player.time + deltaMs).coerceAtLeast(0L)
+      player.setTime(if (length > 0) target.coerceAtMost(length) else target)
+    }
   }
 
   fun addSubtitle(uri: String): Boolean {
@@ -554,6 +575,7 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   private fun emitError(code: String, message: String) = onError(mapOf("code" to code, "message" to message))
 
   companion object {
+    private const val TAG = "VlcPlayerView"
     private const val NO_VIDEO_OUTPUT_TIMEOUT_MS = 3000L
     private const val PROGRESS_INTERVAL_MS = 250L
     private const val WORKER_CALL_TIMEOUT_S = 5L

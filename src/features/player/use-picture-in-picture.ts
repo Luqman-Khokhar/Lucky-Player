@@ -14,8 +14,8 @@ type Options = {
   skipSeconds: number;
   /** The picture-in-picture window was dismissed instead of expanded back into the app. */
   onClosed: () => void;
-  onTogglePlay: () => void;
-  onSkip: (deltaMs: number) => void;
+  /** Mirrors a play/pause the native player already applied from the window buttons. */
+  onPausedChange: (paused: boolean) => void;
 };
 
 function warn(scope: string) {
@@ -27,7 +27,7 @@ function warn(scope: string) {
  * forward buttons in sync, and tracks whether the window is showing.
  */
 export function usePictureInPicture(options: Options) {
-  const { playing, paused, width, height, skipSeconds, onClosed, onTogglePlay, onSkip } = options;
+  const { playing, paused, width, height, skipSeconds, onClosed, onPausedChange } = options;
   const [supported] = useState(() => VlcPlayer.isPictureInPictureSupported());
   const [active, setActive] = useState(false);
 
@@ -61,9 +61,9 @@ export function usePictureInPicture(options: Options) {
     }, CLOSE_CHECK_MS);
   };
 
+  // Skips need no mirroring: the next progress event carries the new position.
   const onAction: NonNullable<VlcPlayerViewProps['onPictureInPictureAction']> = ({ nativeEvent }) => {
-    if (nativeEvent.action === 'toggle') onTogglePlay();
-    else onSkip((nativeEvent.action === 'rewind' ? -skipSeconds : skipSeconds) * 1000);
+    if (nativeEvent.action === 'toggle') onPausedChange(nativeEvent.paused);
   };
 
   return { supported, active, enter, onChange, onAction };

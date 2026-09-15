@@ -26,7 +26,8 @@ export type LoadEventPayload = {
 };
 
 export type PictureInPictureEventPayload = { active: boolean };
-export type PictureInPictureActionEventPayload = { action: 'rewind' | 'toggle' | 'forward' };
+/** The player already applied the action; `paused` is its state afterwards. */
+export type PictureInPictureActionEventPayload = { action: 'rewind' | 'toggle' | 'forward'; paused: boolean };
 
 export type ProgressEventPayload = { position: number; duration: number };
 export type BufferingEventPayload = { percent: number };

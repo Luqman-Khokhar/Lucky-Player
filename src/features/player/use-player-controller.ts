@@ -92,8 +92,7 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     height: media?.height ?? 0,
     skipSeconds: settings.seekStepSec,
     onClosed: () => setPaused(true),
-    onTogglePlay: togglePlay,
-    onSkip: skip,
+    onPausedChange: setPaused,
   });
 
   const onLoad: Handler<'onLoad'> = ({ nativeEvent }) => {
