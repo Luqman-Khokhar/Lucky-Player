@@ -9,21 +9,24 @@ import android.util.Log
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
-import java.util.UUID
+import java.security.SecureRandom
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 
 /**
- * Casting state shared by the app, the service and the server: running server, pairing, connected laptops. Thread-safe;
- * [listener] is called on the main thread with the same map [snapshot] returns.
+ * Casting state shared by the app, the service and the server: running server, pairing, connected laptops and the
+ * video one of them plays. Thread-safe; [listener] and [playbackListener] are called on the main thread.
  */
 object CastSession {
   private const val TAG = "CastSession"
   private const val TICK_MS = 5_000L
   private const val MAX_RECEIVERS = 4
+  private val PLAYBACK_STATUSES = setOf("loading", "blocked", "buffering", "playing", "paused", "ended", "error")
 
   class NoNetworkException : Exception("No Wi-Fi or hotspot network")
+
+  class CastException(val code: String, message: String) : Exception(message)
 
   internal class Receiver(
     val id: String,
@@ -35,11 +38,27 @@ object CastSession {
     val socket: CastWebSocket
   )
 
+  /** The video a laptop plays. Mutable fields are guarded by lock and come from the laptop's reports. */
+  private class Active(
+    val receiverId: String,
+    val receiverName: String,
+    val media: CastMedia,
+    val token: String,
+    var status: String,
+    var positionMs: Long,
+    var durationMs: Long = 0L,
+    var error: String? = null
+  )
+
   @Volatile
   var listener: ((Map<String, Any?>) -> Unit)? = null
 
+  @Volatile
+  var playbackListener: ((Map<String, Any?>?) -> Unit)? = null
+
   private val lock = Any()
   private val mainHandler = Handler(Looper.getMainLooper())
+  private val random = SecureRandom()
 
   // Guarded by lock.
   private var appContext: Context? = null
@@ -48,6 +67,7 @@ object CastSession {
   private var address: CastNetwork.LocalAddress? = null
   private var ticker: ScheduledExecutorService? = null
   private val receivers = LinkedHashMap<String, Receiver>()
+  private var active: Active? = null
 
   @Throws(IOException::class, NoNetworkException::class)
   fun start(context: Context): Map<String, Any?> {
@@ -55,7 +75,7 @@ object CastSession {
     synchronized(lock) {
       if (server != null) return snapshotLocked()
       val local = CastNetwork.localAddress(app) ?: throw NoNetworkException()
-      val http = CastHttpServer(app) { socket, request -> serveReceiver(socket, request) }
+      val http = CastHttpServer(app, { token -> mediaFor(token) }) { socket, request -> serveReceiver(socket, request) }
       http.start()
       appContext = app
       server = http
@@ -75,6 +95,7 @@ object CastSession {
     val closing = synchronized(lock) {
       val http = server ?: return
       server = null
+      active = null
       ticker?.shutdownNow()
       ticker = null
       http.stop()
@@ -88,6 +109,7 @@ object CastSession {
     Log.i(TAG, "Casting stopped")
     CastService.stop(context.applicationContext)
     emit()
+    emitPlayback()
   }
 
   /** Every laptop has to enter the code again; connected ones are disconnected. */
@@ -98,6 +120,7 @@ object CastSession {
     }
     closing.forEach { it.socket.close() }
     emit()
+    emitPlayback()
   }
 
   fun snapshot(): Map<String, Any?> = synchronized(lock) { snapshotLocked() }
@@ -122,6 +145,104 @@ object CastSession {
     )
   }
 
+  // region Playback
+
+  /**
+   * Sends a video to a connected laptop, replacing what any laptop was playing. Blocking (probes the file); call off
+   * the main thread.
+   */
+  @Throws(CastException::class)
+  fun castMedia(context: Context, receiverId: String, uri: String, title: String, startMs: Long) {
+    val app = context.applicationContext
+    val receiver = synchronized(lock) { receivers[receiverId] }
+      ?: throw CastException("ERR_NO_RECEIVER", "That laptop is no longer connected. Open the Cast screen to connect it again.")
+    val media = try {
+      CastMedia.describe(app, uri, title)
+    } catch (e: IOException) {
+      Log.w(TAG, "Cannot open $uri for casting", e)
+      throw CastException("ERR_OPEN", "Couldn't open this video for casting. Check that the file still exists.")
+    }
+    val tracks = CodecPlanner.readTracks(app, media)
+    val plan = CodecPlanner.plan(media, tracks, receiver.capabilities)
+    Log.i(TAG, "Plan ${media.mimeType} video=${tracks?.video} audio=${tracks?.audio} direct=${plan.direct} ${plan.blocker}")
+    if (!plan.direct) {
+      val browser = receiver.browser.ifEmpty { "This browser" }
+      throw CastException(
+        "ERR_UNSUPPORTED",
+        "$browser can't play ${plan.blocker} as it is. Converting videos while casting comes in the next update."
+      )
+    }
+
+    val next = Active(receiverId, receiver.name, media, newToken(), "loading", startMs.coerceAtLeast(0L))
+    val previous = synchronized(lock) {
+      val replaced = active
+      active = next
+      replaced?.takeIf { it.receiverId != receiverId }?.let { receivers[it.receiverId] }
+    }
+    previous?.socket?.sendText(message("stop"))
+    sendLoad(receiver, next)
+    Log.i(TAG, "Casting ${media.mimeType} (${media.size} bytes) to ${receiver.name}")
+    emitPlayback()
+  }
+
+  /** play, pause, seek (to [positionMs]) or stop for the video being cast. */
+  fun castControl(action: String, positionMs: Long) {
+    val (current, receiver) = synchronized(lock) {
+      val playing = active ?: return
+      if (action == "seek") playing.positionMs = positionMs.coerceAtLeast(0L)
+      if (action == "stop") active = null
+      playing to receivers[playing.receiverId]
+    }
+    when (action) {
+      "play", "pause" -> receiver?.socket?.sendText(message(action))
+      "seek" -> receiver?.socket?.sendText(message("seek", "ms" to current.positionMs))
+      "stop" -> {
+        receiver?.socket?.sendText(message("stop"))
+        emitPlayback()
+      }
+    }
+  }
+
+  fun playbackSnapshot(): Map<String, Any?>? = synchronized(lock) {
+    val current = active ?: return@synchronized null
+    val connected = receivers.containsKey(current.receiverId)
+    mapOf(
+      "receiverId" to current.receiverId,
+      "receiverName" to current.receiverName,
+      "uri" to current.media.uri,
+      "title" to current.media.title,
+      "status" to if (connected) current.status else "disconnected",
+      "positionMs" to current.positionMs.toDouble(),
+      "durationMs" to current.durationMs.toDouble(),
+      "error" to current.error
+    )
+  }
+
+  internal fun mediaFor(token: String): CastMedia? = synchronized(lock) { active?.takeIf { it.token == token }?.media }
+
+  private fun sendLoad(receiver: Receiver, item: Active) {
+    val (positionMs, title) = synchronized(lock) { item.positionMs to item.media.title }
+    receiver.socket.sendText(
+      message("load", "url" to "/media/${item.token}", "mimeType" to item.media.mimeType, "title" to title, "startMs" to positionMs)
+    )
+  }
+
+  private fun onReceiverState(receiver: Receiver, report: JSONObject) {
+    val status = report.optString("status")
+    if (status !in PLAYBACK_STATUSES) return
+    synchronized(lock) {
+      val current = active ?: return
+      if (current.receiverId != receiver.id || report.optString("token") != current.token) return
+      current.status = status
+      current.positionMs = report.optLong("positionMs", current.positionMs).coerceAtLeast(0L)
+      current.durationMs = report.optLong("durationMs", current.durationMs).coerceAtLeast(0L)
+      current.error = report.optString("error").takeIf { status == "error" && it.isNotEmpty() }?.take(200)
+    }
+    emitPlayback()
+  }
+
+  // endregion
+
   // region Receiver connection (one server thread per laptop, blocking)
 
   private fun serveReceiver(socket: CastWebSocket, request: CastHttpServer.Request) {
@@ -143,6 +264,7 @@ object CastSession {
           "pair" -> if (receiver == null) {
             receiver = hello?.let { onPair(socket, request, it, incoming.optString("code").trim()) }
           }
+          "state" -> receiver?.let { onReceiverState(it, incoming) }
           "heartbeat" -> Unit
         }
       }
@@ -156,7 +278,8 @@ object CastSession {
 
   private fun onHello(socket: CastWebSocket, hello: JSONObject): Receiver? {
     val current = synchronized(lock) { pairing } ?: return null
-    if (current.isPaired(hello.optString("token", null))) return accept(socket, hello)
+    val token: String? = hello.optString("token", null)
+    if (token != null && current.isPaired(token)) return accept(socket, hello, current.receiverId(token))
     socket.sendText(message("need_code"))
     return null
   }
@@ -166,7 +289,7 @@ object CastSession {
     return when (val result = current.pair(code, request.remoteAddress, receiverName(hello))) {
       is CastPairing.Result.Paired -> {
         socket.sendText(message("paired", "token" to result.token))
-        accept(socket, hello)
+        accept(socket, hello, current.receiverId(result.token))
       }
       is CastPairing.Result.Refused -> {
         socket.sendText(message("pair_failed", "retryAfterMs" to result.retryAfterMs))
@@ -177,9 +300,9 @@ object CastSession {
     }
   }
 
-  private fun accept(socket: CastWebSocket, hello: JSONObject): Receiver? {
+  private fun accept(socket: CastWebSocket, hello: JSONObject, id: String): Receiver? {
     val receiver = Receiver(
-      id = UUID.randomUUID().toString(),
+      id = id,
       name = receiverName(hello),
       browser = clean(hello.optString("browser")),
       os = clean(hello.optString("os")),
@@ -187,26 +310,38 @@ object CastSession {
       connectedAt = System.currentTimeMillis(),
       socket = socket
     )
+    var replaced: Receiver? = null
+    var resume: Active? = null
     val context = synchronized(lock) {
       if (server == null) return null
-      if (receivers.size >= MAX_RECEIVERS) {
+      replaced = receivers[id]
+      if (replaced == null && receivers.size >= MAX_RECEIVERS) {
         socket.sendText(message("busy", "max" to MAX_RECEIVERS))
         return null
       }
-      receivers[receiver.id] = receiver
+      receivers[id] = receiver
+      resume = active?.takeIf { it.receiverId == id }
       appContext
     }
-    socket.sendText(message("welcome", "receiverId" to receiver.id, "phoneName" to phoneName(context)))
+    // The same laptop reconnected before its old connection timed out.
+    replaced?.socket?.close()
+    socket.sendText(message("welcome", "receiverId" to id, "phoneName" to phoneName(context)))
+    // Reconnected mid-video: the page continues if it still has the video, or reloads it at the last position.
+    resume?.let { sendLoad(receiver, it) }
     Log.i(TAG, "Laptop connected: ${receiver.name}")
     emit()
+    if (resume != null) emitPlayback()
     return receiver
   }
 
   private fun remove(receiver: Receiver) {
-    val removed = synchronized(lock) { receivers.remove(receiver.id, receiver) }
+    val (removed, wasPlaying) = synchronized(lock) {
+      receivers.remove(receiver.id, receiver) to (active?.receiverId == receiver.id)
+    }
     if (!removed) return
     Log.i(TAG, "Laptop disconnected: ${receiver.name}")
     emit()
+    if (wasPlaying) emitPlayback()
   }
 
   // endregion
@@ -232,6 +367,13 @@ object CastSession {
     if (context != null && state["running"] == true) CastNotification.update(context, state)
     mainHandler.post { listener?.invoke(state) }
   }
+
+  private fun emitPlayback() {
+    val playback = playbackSnapshot()
+    mainHandler.post { playbackListener?.invoke(playback) }
+  }
+
+  private fun newToken(): String = ByteArray(16).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it) }
 
   private fun receiverName(hello: JSONObject): String =
     listOf(clean(hello.optString("browser")), clean(hello.optString("os")))

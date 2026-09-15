@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { Spacing } from '@/constants/theme';
+import { useCastVideo } from '@/features/cast/use-cast-video';
 import { useTheme } from '@/hooks/use-theme';
 import { VlcPlayerView } from '@modules/vlc-player';
 
@@ -15,6 +16,7 @@ import type { SystemControls } from './use-system-controls';
 
 const CONTROLS_HIDE_MS = 3500;
 const LOCKED_HINT_MS = 1500;
+const CAST_NOTICE_MS = 6000;
 // Previous restarts the current video once playback is past this point.
 const RESTART_THRESHOLD_MS = 3000;
 
@@ -44,6 +46,22 @@ export function PlayerSession(props: PlayerSessionProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sheetSession, setSheetSession] = useState(0);
   const [lastInteraction, setLastInteraction] = useState(0);
+  const [castNotice, setCastNotice] = useState<string | null>(null);
+  const { castFromPlayer } = useCastVideo();
+
+  useEffect(() => {
+    if (!castNotice) return;
+    const id = setTimeout(() => setCastNotice(null), CAST_NOTICE_MS);
+    return () => clearTimeout(id);
+  }, [castNotice]);
+
+  // Local playback pauses first; the laptop continues from the same position.
+  const castToLaptop = async () => {
+    if (!state.paused) player.togglePlay();
+    const { position, duration } = player.getProgress();
+    const error = await castFromPlayer({ uri, title, startMs: position, durationMs: duration });
+    if (error) setCastNotice(error);
+  };
 
   const ended = state.playbackState === 'ended';
   const inPictureInPicture = player.pictureInPicture.active;
@@ -127,6 +145,7 @@ export function PlayerSession(props: PlayerSessionProps) {
         rotationLocked={props.rotationLocked}
         pictureInPictureSupported={player.pictureInPicture.supported}
         onPictureInPicture={player.pictureInPicture.enter}
+        onCast={castToLaptop}
         onBack={onBack}
         onPrevious={playPrevious}
         onNext={() => onNext?.()}
@@ -139,7 +158,7 @@ export function PlayerSession(props: PlayerSessionProps) {
         onInteraction={markInteraction}
       />
 
-      <PlayerNotice message={inPictureInPicture ? null : state.notice} />
+      <PlayerNotice message={inPictureInPicture ? null : (castNotice ?? state.notice)} />
 
       {state.error ? <PlayerErrorPanel error={state.error} onRetry={player.retry} onBack={onBack} /> : null}
 

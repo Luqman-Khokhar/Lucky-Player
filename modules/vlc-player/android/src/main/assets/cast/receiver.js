@@ -1,6 +1,7 @@
 'use strict';
 
-// Lucky Player laptop receiver: pairs with the phone over a WebSocket and waits for videos. No build step, no libraries.
+// Lucky Player laptop receiver: pairs with the phone over a WebSocket and plays the videos it sends.
+// No build step, no libraries. The phone controls playback; this page reports what the video element does.
 (() => {
   const TOKEN_KEY = 'lucky-player-cast-token';
   const HEARTBEAT_MS = 5000;
@@ -10,6 +11,9 @@
   const RECONNECT_MAX_MS = 10000;
   // Failed attempts before the connecting screen explains the likely network problem.
   const HINT_AFTER_FAILURES = 2;
+  const STATE_REPORT_MS = 1000;
+  const CONTROLS_HIDE_MS = 3000;
+  const SEEK_STEP_S = 10;
 
   // Probed once and reported to the phone, which decides per video whether the file can be sent as is.
   const DIRECT_TYPES = {
@@ -31,16 +35,30 @@
     'fmp4-h264': 'video/mp4; codecs="avc1.640028"',
   };
 
+  const MEDIA_ERRORS = {
+    1: 'Loading the video was stopped.',
+    2: 'The video stopped loading from the phone. Check the Wi-Fi connection.',
+    3: "This browser couldn't decode the video.",
+    4: "This browser can't play this video's format.",
+  };
+
   const $ = (id) => document.getElementById(id);
-  const SCREENS = ['connecting', 'pair', 'ready', 'waiting', 'ended'];
+  const SCREENS = ['connecting', 'pair', 'ready', 'waiting', 'player', 'ended'];
   const codeInput = $('pair-code');
   const pairButton = $('pair-button');
   const pairError = $('pair-error');
+  const player = $('screen-player');
+  const video = $('video');
+  const seek = $('seek');
+  const playToggle = $('play-toggle');
+  const tapToPlay = $('tap-to-play');
+  const playerStatus = $('player-status');
 
   let socket = null;
   let heartbeatTimer = 0;
   let reconnectTimer = 0;
   let lockoutTimer = 0;
+  let idleTimer = 0;
   let reconnectDelay = RECONNECT_MIN_MS;
   let failedAttempts = 0;
   let lastMessageAt = 0;
@@ -49,6 +67,11 @@
   let started = false;
   // The phone stopped casting; wait for the user instead of retrying forever.
   let stopped = false;
+  // The video the phone sent: { token, title }.
+  let current = null;
+  // Where the video starts once its metadata loads; also reported as the position until then.
+  let pendingStartS = null;
+  let seekingByUser = false;
 
   function show(name) {
     for (const screen of SCREENS) $(`screen-${screen}`).hidden = screen !== name;
@@ -101,14 +124,16 @@
   }
 
   function capabilities() {
-    const video = document.createElement('video');
+    const probe = document.createElement('video');
     const direct = {};
-    for (const [key, type] of Object.entries(DIRECT_TYPES)) direct[key] = video.canPlayType(type);
+    for (const [key, type] of Object.entries(DIRECT_TYPES)) direct[key] = probe.canPlayType(type);
     const Source = window.MediaSource || window.ManagedMediaSource;
     const stream = {};
     for (const [key, type] of Object.entries(STREAM_TYPES)) stream[key] = Boolean(Source && Source.isTypeSupported(type));
     return { direct, stream };
   }
+
+  // region Connection
 
   function send(message) {
     if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
@@ -194,13 +219,29 @@
         reconnectDelay = RECONNECT_MIN_MS;
         hideBanner();
         for (const element of document.querySelectorAll('.phone-name')) element.textContent = message.phoneName || 'your phone';
-        show(started ? 'waiting' : 'ready');
+        show(current ? 'player' : started ? 'waiting' : 'ready');
         break;
       case 'busy':
         end('Too many laptops', `Lucky Player casts to ${message.max || 4} laptops at a time. Close this page on another laptop, then click Reconnect.`);
         break;
       case 'bye':
         end('Casting stopped', 'Start casting again in Lucky Player on your phone, then click Reconnect.');
+        break;
+      case 'load':
+        loadMedia(message);
+        break;
+      case 'play':
+        if (current) playVideo();
+        break;
+      case 'pause':
+        video.pause();
+        break;
+      case 'seek':
+        seekTo(Number(message.ms) / 1000);
+        break;
+      case 'stop':
+        resetMedia();
+        show(started ? 'waiting' : 'ready');
         break;
       default:
         break;
@@ -210,11 +251,16 @@
   function end(title, detail) {
     stopped = true;
     welcomed = false;
+    resetMedia();
     hideBanner();
     $('ended-title').textContent = title;
     $('ended-detail').textContent = detail;
     show('ended');
   }
+
+  // endregion
+
+  // region Pairing
 
   function setPairError(text) {
     pairError.textContent = text;
@@ -248,10 +294,221 @@
     lockoutTimer = setInterval(tick, 1000);
   }
 
+  // endregion
+
+  // region Playback
+
+  function loadMedia(message) {
+    const url = String(message.url || '');
+    const token = url.split('/').pop();
+    if (current && current.token === token && video.getAttribute('src') === url) {
+      // Reconnected mid-video: this page kept playing, so only the phone needs the current state.
+      report();
+      return;
+    }
+    current = { token, title: String(message.title || 'Video') };
+    $('video-title').textContent = current.title;
+    document.title = `${current.title} · Lucky Player`;
+    pendingStartS = Math.max(0, Number(message.startMs) || 0) / 1000;
+    tapToPlay.hidden = true;
+    show('player');
+    showControls();
+    video.src = url;
+    video.load();
+    updatePlayerUi();
+    report();
+  }
+
+  function playVideo() {
+    const attempt = video.play();
+    if (!attempt) return;
+    attempt
+      .then(() => {
+        tapToPlay.hidden = true;
+        updatePlayerUi();
+      })
+      .catch((error) => {
+        // Autoplay with sound needs one click on this page first.
+        if (error && error.name === 'NotAllowedError') {
+          tapToPlay.hidden = false;
+          updatePlayerUi();
+          report();
+        }
+      });
+  }
+
+  function togglePlay() {
+    if (!current) return;
+    if (video.paused || video.ended) playVideo();
+    else video.pause();
+  }
+
+  function seekTo(seconds) {
+    if (!current || !Number.isFinite(seconds)) return;
+    const target = Math.max(0, seconds);
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+      pendingStartS = target;
+      return;
+    }
+    video.currentTime = Number.isFinite(video.duration) ? Math.min(target, video.duration) : target;
+  }
+
+  function resetMedia() {
+    current = null;
+    pendingStartS = null;
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    tapToPlay.hidden = true;
+    playerStatus.hidden = true;
+    document.title = 'Lucky Player';
+    clearTimeout(idleTimer);
+    player.classList.remove('idle');
+  }
+
+  function statusNow() {
+    if (video.error) return 'error';
+    if (!tapToPlay.hidden) return 'blocked';
+    if (pendingStartS !== null || video.readyState < HTMLMediaElement.HAVE_METADATA) return 'loading';
+    if (video.ended) return 'ended';
+    if (video.seeking || (!video.paused && video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA)) return 'buffering';
+    return video.paused ? 'paused' : 'playing';
+  }
+
+  function errorText() {
+    return (video.error && MEDIA_ERRORS[video.error.code]) || "The video couldn't play.";
+  }
+
+  function durationSeconds() {
+    return Number.isFinite(video.duration) ? video.duration : 0;
+  }
+
+  function report() {
+    if (!current) return;
+    const status = statusNow();
+    const positionS = pendingStartS !== null ? pendingStartS : video.currentTime;
+    const message = {
+      type: 'state',
+      token: current.token,
+      status,
+      positionMs: Math.round(positionS * 1000),
+      durationMs: Math.round(durationSeconds() * 1000),
+    };
+    if (status === 'error') message.error = errorText();
+    send(message);
+  }
+
+  function formatTime(seconds) {
+    const total = Math.max(0, Math.floor(seconds || 0));
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const rest = String(total % 60).padStart(2, '0');
+    return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${rest}` : `${minutes}:${rest}`;
+  }
+
+  function updatePlayerUi() {
+    if (!current) return;
+    const status = statusNow();
+    const playing = status === 'playing' || status === 'buffering';
+    playToggle.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    $('icon-play').toggleAttribute('hidden', playing);
+    $('icon-pause').toggleAttribute('hidden', !playing);
+
+    const durationS = durationSeconds();
+    const positionS = seekingByUser ? Number(seek.value) : (pendingStartS ?? video.currentTime);
+    const timeText = `${formatTime(positionS)} / ${formatTime(durationS)}`;
+    $('time').textContent = timeText;
+    seek.max = String(Math.max(0, Math.floor(durationS)));
+    if (!seekingByUser) seek.value = String(Math.floor(positionS));
+    seek.setAttribute('aria-valuetext', timeText);
+    seek.disabled = durationS <= 0;
+
+    const text = status === 'error' ? errorText() : status === 'loading' ? 'Loading…' : status === 'buffering' ? 'Buffering…' : '';
+    playerStatus.textContent = text;
+    playerStatus.hidden = !text || !tapToPlay.hidden;
+    if (!playing) showControls();
+  }
+
+  function showControls() {
+    player.classList.remove('idle');
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      const focused = document.activeElement;
+      const keyboardInControls = focused && $('controls').contains(focused) && focused.matches(':focus-visible');
+      if (current && !video.paused && !seekingByUser && !keyboardInControls) player.classList.add('idle');
+    }, CONTROLS_HIDE_MS);
+  }
+
   function enterFullscreen() {
     const root = document.documentElement;
     if (!document.fullscreenElement && root.requestFullscreen) root.requestFullscreen().catch(() => undefined);
   }
+
+  function toggleFullscreen() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+    else enterFullscreen();
+  }
+
+  // Registered before the reporting listeners so the start position is applied before the first report.
+  video.addEventListener('loadedmetadata', () => {
+    if (pendingStartS === null) return;
+    const startS = pendingStartS;
+    pendingStartS = null;
+    if (startS > 0 && startS < (durationSeconds() || Infinity)) video.currentTime = startS;
+    playVideo();
+  });
+
+  for (const name of ['loadedmetadata', 'durationchange', 'playing', 'pause', 'waiting', 'seeking', 'seeked', 'ended', 'error', 'canplay']) {
+    video.addEventListener(name, () => {
+      updatePlayerUi();
+      report();
+    });
+  }
+  video.addEventListener('timeupdate', updatePlayerUi);
+  video.addEventListener('dblclick', toggleFullscreen);
+  setInterval(report, STATE_REPORT_MS);
+
+  playToggle.addEventListener('click', togglePlay);
+  $('player-fullscreen').addEventListener('click', toggleFullscreen);
+
+  tapToPlay.addEventListener('click', () => {
+    started = true;
+    enterFullscreen();
+    playVideo();
+  });
+
+  seek.addEventListener('input', () => {
+    seekingByUser = true;
+    showControls();
+    updatePlayerUi();
+  });
+
+  seek.addEventListener('change', () => {
+    seekingByUser = false;
+    seekTo(Number(seek.value));
+  });
+
+  for (const name of ['mousemove', 'pointerdown', 'keydown', 'touchstart']) {
+    player.addEventListener(name, showControls, { passive: true });
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (player.hidden || !current) return;
+    const target = event.target;
+    const inControl = target instanceof HTMLElement && (target.tagName === 'BUTTON' || target.tagName === 'INPUT');
+    if ((event.key === ' ' || event.key === 'k') && !inControl) {
+      event.preventDefault();
+      togglePlay();
+    } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && target !== seek) {
+      event.preventDefault();
+      seekTo(video.currentTime + (event.key === 'ArrowLeft' ? -SEEK_STEP_S : SEEK_STEP_S));
+    } else if (event.key === 'f' && !inControl) {
+      toggleFullscreen();
+    }
+    showControls();
+  });
+
+  // endregion
 
   $('pair-form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -279,7 +536,9 @@
   $('fullscreen-button').addEventListener('click', enterFullscreen);
 
   document.addEventListener('fullscreenchange', () => {
-    $('fullscreen-button').hidden = Boolean(document.fullscreenElement);
+    const fullscreen = Boolean(document.fullscreenElement);
+    $('fullscreen-button').hidden = fullscreen;
+    $('player-fullscreen').setAttribute('aria-label', fullscreen ? 'Exit full screen' : 'Full screen');
   });
 
   $('reconnect-button').addEventListener('click', () => {

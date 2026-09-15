@@ -11,10 +11,14 @@ import type { CastReceiver } from '@modules/vlc-player';
 type CastReceiverListProps = {
   receivers: CastReceiver[];
   onForgetLaptops: () => void;
+  /** Shows a Play here button per laptop when a video is waiting for one. */
+  onPlayHere?: (receiver: CastReceiver) => void;
+  /** Laptop the video is being sent to right now. */
+  sendingTo?: string | null;
 };
 
 /** Laptops connected right now, or a waiting hint while there are none. */
-export function CastReceiverList({ receivers, onForgetLaptops }: CastReceiverListProps) {
+export function CastReceiverList({ receivers, onForgetLaptops, onPlayHere, sendingTo }: CastReceiverListProps) {
   const theme = useTheme();
 
   return (
@@ -33,14 +37,22 @@ export function CastReceiverList({ receivers, onForgetLaptops }: CastReceiverLis
       ) : (
         <View style={styles.list} accessibilityLiveRegion="polite">
           {receivers.map((receiver) => (
-            <View key={receiver.id} style={styles.row} accessible accessibilityLabel={`${receiver.name}, connected`}>
+            <View key={receiver.id} style={styles.row}>
               <Icon name="laptop" color={theme.text} />
-              <View style={styles.text}>
+              <View style={styles.text} accessible accessibilityLabel={`${receiver.name}, connected`}>
                 <ThemedText type="smallBold">{receiver.name}</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary">
                   Connected
                 </ThemedText>
               </View>
+              {onPlayHere ? (
+                <Button
+                  label={sendingTo === receiver.id ? 'Sending…' : 'Play here'}
+                  disabled={Boolean(sendingTo)}
+                  onPress={() => onPlayHere(receiver)}
+                  accessibilityHint={`Plays the video on ${receiver.name}`}
+                />
+              ) : null}
             </View>
           ))}
         </View>

@@ -42,6 +42,7 @@ export default function RootLayout() {
             <Stack.Screen name="folder/[bucketId]" />
             <Stack.Screen name="player" options={{ animation: 'fade' }} />
             <Stack.Screen name="cast" />
+            <Stack.Screen name="cast-remote" options={{ animation: 'fade' }} />
           </Stack>
         </ThemeProvider>
       </Provider>

@@ -228,6 +228,24 @@ export type CastState = {
   receivers: CastReceiver[];
 };
 
+/** What the laptop's video is doing; `disconnected` while that laptop has no connection to the phone. */
+export type CastPlaybackStatus = 'loading' | 'blocked' | 'buffering' | 'playing' | 'paused' | 'ended' | 'error' | 'disconnected';
+
+/** The video a laptop plays, as last reported by its page (about once a second). */
+export type CastPlayback = {
+  receiverId: string;
+  receiverName: string;
+  uri: string;
+  title: string;
+  status: CastPlaybackStatus;
+  positionMs: number;
+  durationMs: number;
+  /** Set when status is `error` */
+  error: string | null;
+};
+
+export type CastControlAction = 'play' | 'pause' | 'seek' | 'stop';
+
 export type MediaInfo = {
   duration: number;
   video: VideoTrackInfo[];

@@ -127,7 +127,7 @@ object VlcEngine {
    * (picker app forwarded none, or the app restarted without a persisted grant), retry through
    * MediaStore, which READ_MEDIA_VIDEO covers.
    */
-  private fun openContentDescriptor(context: Context, uri: Uri): ParcelFileDescriptor? =
+  fun openContentDescriptor(context: Context, uri: Uri): ParcelFileDescriptor? =
     try {
       context.contentResolver.openFileDescriptor(uri, "r")
     } catch (e: SecurityException) {

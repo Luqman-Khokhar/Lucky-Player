@@ -30,16 +30,38 @@ class VlcPlayerModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("VlcPlayer")
 
-    Events("onSoundSettingsChanged", "onCastStateChanged")
+    Events("onSoundSettingsChanged", "onCastStateChanged", "onCastPlaybackChanged")
 
     OnCreate {
       SoundEffectsController.listener = { settings -> sendEvent("onSoundSettingsChanged", mapOf("settings" to settings)) }
       CastSession.listener = { state -> sendEvent("onCastStateChanged", mapOf("state" to state)) }
+      CastSession.playbackListener = { playback -> sendEvent("onCastPlaybackChanged", mapOf("playback" to playback)) }
     }
 
     OnDestroy {
       SoundEffectsController.listener = null
       CastSession.listener = null
+      CastSession.playbackListener = null
+    }
+
+    AsyncFunction("castMedia") { receiverId: String, uri: String, title: String, startMs: Double, promise: Promise ->
+      val appContext = context
+      castExecutor.execute {
+        try {
+          CastSession.castMedia(appContext, receiverId, uri, title, startMs.toLong())
+          promise.resolve(null)
+        } catch (e: CastSession.CastException) {
+          promise.reject(e.code, e.message ?: "Could not cast this video", e)
+        }
+      }
+    }
+
+    AsyncFunction("castControl") { action: String, positionMs: Double ->
+      CastSession.castControl(action, positionMs.toLong())
+    }
+
+    AsyncFunction("getCastPlayback") {
+      CastSession.playbackSnapshot()
     }
 
     AsyncFunction("startCast") { promise: Promise ->

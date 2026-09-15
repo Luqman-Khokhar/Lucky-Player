@@ -57,6 +57,9 @@ internal class CastPairing(context: Context) {
     return Result.Paired(token)
   }
 
+  /** Stable across reconnects, so a laptop that drops and comes back continues its video. Reveals nothing about the token. */
+  fun receiverId(token: String): String = hash(token).take(16)
+
   fun forgetAll() {
     prefs.edit().clear().apply()
   }

@@ -1,6 +1,6 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-import type { CastState } from '@modules/vlc-player';
+import type { CastPlayback, CastState } from '@modules/vlc-player';
 
 export type CastStartError = { code: 'no_network' | 'server'; message: string };
 
@@ -8,6 +8,8 @@ export type CastSliceState = CastState & {
   /** Runtime only: a start request is in flight, and why the last one failed. */
   starting: boolean;
   startError: CastStartError | null;
+  /** The video a laptop plays, mirrored from native. */
+  playback: CastPlayback | null;
 };
 
 const initialState: CastSliceState = {
@@ -18,6 +20,7 @@ const initialState: CastSliceState = {
   receivers: [],
   starting: false,
   startError: null,
+  playback: null,
 };
 
 const castSlice = createSlice({
@@ -37,8 +40,11 @@ const castSlice = createSlice({
       state.starting = false;
       state.startError = action.payload;
     },
+    castPlaybackChanged(state, action: PayloadAction<CastPlayback | null>) {
+      state.playback = action.payload;
+    },
   },
 });
 
-export const { castStateChanged, castStartRequested, castStartFinished } = castSlice.actions;
+export const { castStateChanged, castStartRequested, castStartFinished, castPlaybackChanged } = castSlice.actions;
 export default castSlice.reducer;

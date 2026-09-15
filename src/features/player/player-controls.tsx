@@ -14,7 +14,7 @@ import { SeekBar } from './seek-bar';
 
 const FADE_MS = 200;
 
-const SKIP_ICONS: Record<number, readonly [IconName, IconName]> = {
+export const SKIP_ICONS: Record<number, readonly [IconName, IconName]> = {
   5: ['replay_5', 'forward_5'],
   10: ['replay_10', 'forward_10'],
   30: ['replay_30', 'forward_30'],
@@ -34,6 +34,7 @@ export type PlayerControlsProps = {
   rotationLocked: boolean;
   pictureInPictureSupported: boolean;
   onPictureInPicture: () => void;
+  onCast: () => void;
   onBack: () => void;
   onPrevious: () => void;
   onNext: () => void;
@@ -110,6 +111,7 @@ export function PlayerControls(props: PlayerControlsProps) {
                 </ThemedText>
               ) : null}
             </View>
+            <IconButton icon="cast" label="Cast to a laptop" {...colors} onPress={props.onCast} />
             {props.pictureInPictureSupported ? (
               <IconButton
                 icon="picture_in_picture_alt"

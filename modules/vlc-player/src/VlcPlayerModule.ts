@@ -1,6 +1,8 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
 import type {
+  CastControlAction,
+  CastPlayback,
   CastState,
   DeviceProfile,
   FolderVideo,
@@ -19,6 +21,8 @@ type VlcPlayerModuleEvents = {
   onSoundSettingsChanged: (event: { settings: string }) => void;
   /** Casting started or stopped, a laptop connected or left, the address or code changed. */
   onCastStateChanged: (event: { state: CastState }) => void;
+  /** A laptop reported playback, a video started or stopped, or the playing laptop disconnected. */
+  onCastPlaybackChanged: (event: { playback: CastPlayback | null }) => void;
 };
 
 declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
@@ -77,6 +81,14 @@ declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
   getCastState(): Promise<CastState>;
   /** Every laptop must enter the code again; connected laptops are disconnected. */
   forgetCastReceivers(): Promise<void>;
+  /**
+   * Plays a video in a connected laptop's browser from `startMs`, replacing what was casting. Rejects with
+   * ERR_NO_RECEIVER, ERR_OPEN, or ERR_UNSUPPORTED when the browser can't play the file as it is; messages are for users.
+   */
+  castMedia(receiverId: string, uri: string, title: string, startMs: number): Promise<void>;
+  /** `positionMs` is used by seek only. */
+  castControl(action: CastControlAction, positionMs: number): Promise<void>;
+  getCastPlayback(): Promise<CastPlayback | null>;
 }
 
 export default requireNativeModule<VlcPlayerModule>('VlcPlayer');
