@@ -85,8 +85,13 @@ export function PlayerScreen({ uri, title }: PlayerScreenProps) {
       <PlayerGestureLayer
         locked={locked}
         skipMs={player.skipMs}
+        zoom={state.zoom}
+        getProgress={player.getProgress}
         onToggleControls={toggleControls}
         onSkip={player.skip}
+        onSeek={player.seekTo}
+        onZoom={player.setZoom}
+        onBoost={player.setBoosted}
       />
 
       {loading ? (

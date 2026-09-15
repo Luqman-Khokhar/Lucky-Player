@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
@@ -8,79 +8,66 @@ import { Icon } from '@/components/ui/icon';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-const DOUBLE_TAP_MAX_DELAY_MS = 250;
-const FEEDBACK_MS = 650;
+import { PlayerGestureHud } from './player-gesture-hud';
+import { usePlayerGestures } from './use-player-gestures';
+import { useSystemControls } from './use-system-controls';
+
 const FEEDBACK_SIZE = 104;
 
 type PlayerGestureLayerProps = {
   locked: boolean;
   skipMs: number;
+  zoom: number;
+  getProgress: () => { position: number; duration: number };
   onToggleControls: () => void;
   onSkip: (deltaMs: number) => void;
+  onSeek: (positionMs: number) => void;
+  onZoom: (zoom: number) => void;
+  onBoost: (active: boolean) => void;
 };
 
-type Feedback = { side: 'left' | 'right'; id: number };
-
-/** Tap toggles controls; double-tap on the left/right half seeks back/forward. */
-export function PlayerGestureLayer({ locked, skipMs, onToggleControls, onSkip }: PlayerGestureLayerProps) {
+/** Full-screen touch surface for the player; see usePlayerGestures for the gesture map. */
+export function PlayerGestureLayer(props: PlayerGestureLayerProps) {
   const theme = useTheme();
-  const [width, setWidth] = useState(0);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
-
-  useEffect(() => {
-    if (!feedback) return;
-    const id = setTimeout(() => setFeedback(null), FEEDBACK_MS);
-    return () => clearTimeout(id);
-  }, [feedback]);
-
-  const gesture = useMemo(() => {
-    const doubleTap = Gesture.Tap()
-      .numberOfTaps(2)
-      .maxDelay(DOUBLE_TAP_MAX_DELAY_MS)
-      .enabled(!locked)
-      .runOnJS(true)
-      .onEnd((event, success) => {
-        if (!success || width === 0) return;
-        const side = event.x < width / 2 ? 'left' : 'right';
-        onSkip(side === 'left' ? -skipMs : skipMs);
-        setFeedback({ side, id: Date.now() });
-      });
-    const singleTap = Gesture.Tap()
-      .runOnJS(true)
-      .onEnd((_event, success) => {
-        if (success) onToggleControls();
-      });
-    return Gesture.Exclusive(doubleTap, singleTap);
-  }, [locked, width, skipMs, onSkip, onToggleControls]);
+  const system = useSystemControls();
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const { gesture, hud, feedback } = usePlayerGestures({ ...props, ...size, system });
 
   return (
-    <GestureDetector gesture={gesture}>
-      <View
-        style={StyleSheet.absoluteFill}
-        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel="Show or hide player controls"
-        onAccessibilityTap={onToggleControls}>
-        {feedback ? (
-          <Animated.View
-            key={feedback.id}
-            entering={FadeIn.duration(120)}
-            exiting={FadeOut.duration(250)}
-            pointerEvents="none"
-            style={[
-              styles.feedback,
-              feedback.side === 'left' ? styles.left : styles.right,
-              { backgroundColor: theme.playerScrim },
-            ]}>
-            <Icon name={feedback.side === 'left' ? 'fast_rewind' : 'fast_forward'} size={36} color={theme.playerText} />
-            <ThemedText type="smallBold" style={{ color: theme.playerText }}>
-              {`${Math.round(skipMs / 1000)}s`}
-            </ThemedText>
-          </Animated.View>
-        ) : null}
-      </View>
-    </GestureDetector>
+    <>
+      <GestureDetector gesture={gesture}>
+        <View
+          style={StyleSheet.absoluteFill}
+          onLayout={(event) => {
+            const { width, height } = event.nativeEvent.layout;
+            setSize({ width, height });
+          }}
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel="Show or hide player controls"
+          accessibilityHint="Swipe on the left for brightness, on the right for volume, sideways to seek"
+          onAccessibilityTap={props.onToggleControls}>
+          {feedback ? (
+            <Animated.View
+              key={feedback.id}
+              entering={FadeIn.duration(120)}
+              exiting={FadeOut.duration(250)}
+              pointerEvents="none"
+              style={[
+                styles.feedback,
+                feedback.side === 'left' ? styles.left : styles.right,
+                { backgroundColor: theme.playerScrim },
+              ]}>
+              <Icon name={feedback.side === 'left' ? 'fast_rewind' : 'fast_forward'} size={36} color={theme.playerText} />
+              <ThemedText type="smallBold" style={{ color: theme.playerText }}>
+                {`${Math.round(props.skipMs / 1000)}s`}
+              </ThemedText>
+            </Animated.View>
+          ) : null}
+        </View>
+      </GestureDetector>
+      <PlayerGestureHud hud={hud} />
+    </>
   );
 }
 

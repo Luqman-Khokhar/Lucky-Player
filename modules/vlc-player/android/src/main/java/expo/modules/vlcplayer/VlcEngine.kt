@@ -4,9 +4,11 @@ import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Log
 import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import java.io.File
@@ -16,19 +18,34 @@ class OpenedMedia(val media: Media, val descriptor: ParcelFileDescriptor?)
 
 /** Process-wide libVLC instance plus source helpers shared by the player view and the probe. */
 object VlcEngine {
+  private const val TAG = "VlcEngine"
+
   @Volatile
   private var libVLC: LibVLC? = null
 
   fun get(context: Context): LibVLC =
     libVLC ?: synchronized(this) {
-      libVLC ?: LibVLC(
-        context.applicationContext,
-        arrayListOf(
-          "--audio-time-stretch", // pitch-corrected playback speed
-          "--avcodec-threads=0"   // software decoder picks thread count per core count
-        )
-      ).also { libVLC = it }
+      libVLC ?: run {
+        val startedAt = SystemClock.elapsedRealtime()
+        LibVLC(
+          context.applicationContext,
+          arrayListOf(
+            "--audio-time-stretch", // pitch-corrected playback speed
+            "--avcodec-threads=0"   // software decoder picks thread count per core count
+          )
+        ).also {
+          libVLC = it
+          Log.i(TAG, "libVLC initialized in ${SystemClock.elapsedRealtime() - startedAt} ms")
+        }
+      }
     }
+
+  /** Creates the engine on a background thread so the first video does not pay for libVLC startup. */
+  fun warmUp(context: Context) {
+    if (libVLC != null) return
+    val appContext = context.applicationContext
+    Thread({ get(appContext) }, "vlc-warmup").apply { isDaemon = true }.start()
+  }
 
   /**
    * content:// URIs (document picker, MediaStore, SAF) are opened as file descriptors because

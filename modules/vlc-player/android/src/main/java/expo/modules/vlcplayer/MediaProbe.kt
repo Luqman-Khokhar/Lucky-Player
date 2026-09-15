@@ -1,17 +1,23 @@
 package expo.modules.vlcplayer
 
 import android.content.Context
+import android.os.SystemClock
+import android.util.Log
 import org.videolan.libvlc.interfaces.IMedia
 import java.io.IOException
 
 /** Reads duration and track layout without starting playback. Blocking; call off the main thread. */
 object MediaProbe {
+  private const val TAG = "MediaProbe"
+
   fun probe(context: Context, uri: String): Map<String, Any> {
+    val startedAt = SystemClock.elapsedRealtime()
     val libVLC = VlcEngine.get(context)
     val opened = VlcEngine.openMedia(context, libVLC, uri)
     try {
       val media = opened.media
       media.parse()
+      Log.i(TAG, "probe took ${SystemClock.elapsedRealtime() - startedAt} ms")
       val video = mutableListOf<Map<String, Any>>()
       val audio = mutableListOf<Map<String, Any>>()
       val subtitle = mutableListOf<Map<String, Any>>()

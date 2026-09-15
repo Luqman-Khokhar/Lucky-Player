@@ -15,6 +15,7 @@ import type { PlayerSettingsActions, PlayerSettingsValues } from './settings-she
 import { usePlaybackSession } from './use-playback-session';
 
 const NOTICE_MS = 4000;
+const BOOST_RATE = 2;
 
 type MediaSummary = { codec: string; width: number; height: number; hardware: boolean };
 type Handler<K extends keyof VlcPlayerViewProps> = NonNullable<VlcPlayerViewProps[K]>;
@@ -36,6 +37,8 @@ export function usePlayerController(uri: string | undefined) {
   const [subtitleTrack, setSubtitleTrack] = useState<number>();
   const [speed, setSpeed] = useState(1);
   const [aspect, setAspect] = useState<AspectMode>(settings.defaultAspect);
+  const [zoom, setZoom] = useState(1);
+  const [boosted, setBoosted] = useState(false);
   const [hwOverride, setHwOverride] = useState<HwDecodingMode | null>(null);
   const [audioDelay, setAudioDelay] = useState(0);
   const [subtitleDelay, setSubtitleDelay] = useState(0);
@@ -62,6 +65,7 @@ export function usePlayerController(uri: string | undefined) {
   );
 
   const skip = useCallback((deltaMs: number) => seekTo(progressRef.current.position + deltaMs), [progressRef, seekTo]);
+  const getProgress = useCallback(() => progressRef.current, [progressRef]);
   const togglePlay = useCallback(() => setPaused((value) => !value), []);
 
   const retry = useCallback(() => {
@@ -109,7 +113,10 @@ export function usePlayerController(uri: string | undefined) {
       setTracks((current) => current && { ...current, selectedSubtitle: id });
     },
     selectSpeed: setSpeed,
-    selectAspect: setAspect,
+    selectAspect: (mode) => {
+      setAspect(mode);
+      setZoom(1);
+    },
     selectDecoder: setHwOverride,
     changeAudioDelay: setAudioDelay,
     changeSubtitleDelay: setSubtitleDelay,
@@ -131,8 +138,9 @@ export function usePlayerController(uri: string | undefined) {
           source: uri,
           startPosition: prepared.startPosition,
           paused,
-          rate: speed,
+          rate: boosted ? BOOST_RATE : speed,
           aspect,
+          zoom,
           hwDecoding: hwMode,
           audioTrack,
           subtitleTrack,
@@ -152,8 +160,11 @@ export function usePlayerController(uri: string | undefined) {
     playerKey: attempt,
     playerRef,
     playerProps,
-    state: { playbackState, paused, progress, media, error, notice, settingsValues },
+    state: { playbackState, paused, progress, media, error, notice, settingsValues, zoom },
     skipMs: settings.seekStepSec * 1000,
+    getProgress,
+    setZoom,
+    setBoosted,
     seekTo,
     skip,
     togglePlay,

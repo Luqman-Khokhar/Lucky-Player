@@ -169,6 +169,13 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     if (loadEmitted && !transitioning) player.setVideoScale(scaleFor(aspect))
   }
 
+  // Scales the video layout around its center. SurfaceView follows view transforms on Android 7+.
+  fun setZoom(value: Float?) {
+    val zoom = (value ?: 1f).coerceIn(1f, MAX_ZOOM)
+    videoLayout.scaleX = zoom
+    videoLayout.scaleY = zoom
+  }
+
   fun setHwMode(value: String?) {
     val mode = value ?: "auto"
     if (mode == hwMode) return
@@ -453,6 +460,7 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     private const val NO_VIDEO_OUTPUT_TIMEOUT_MS = 3000L
     private const val PROGRESS_INTERVAL_MS = 250L
     private const val WORKER_CALL_TIMEOUT_S = 5L
+    private const val MAX_ZOOM = 4f
     private const val TRACK_TYPE_VIDEO = 1 // libvlc_track_video
 
     // Events from the media being torn down; ignore them while a new one is loading.
