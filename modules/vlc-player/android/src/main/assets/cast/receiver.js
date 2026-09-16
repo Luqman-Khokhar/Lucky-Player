@@ -4,6 +4,10 @@
 // itself or a stream the phone converts on the fly. No build step, no libraries.
 (() => {
   const TOKEN_KEY = 'lucky-player-cast-token';
+  const NAME_KEY = 'lucky-player-cast-name';
+  // Every Chrome on Linux looks alike in a list, so each laptop takes a name of its own and shows it.
+  const NAME_FIRST = ['Amber', 'Blue', 'Bright', 'Calm', 'Copper', 'Green', 'Quiet', 'Silver', 'Swift', 'Warm'];
+  const NAME_SECOND = ['Falcon', 'Fox', 'Harbour', 'Heron', 'Maple', 'Meadow', 'Otter', 'Ridge', 'River', 'Willow'];
   const HEARTBEAT_MS = 5000;
   // The phone sends a heartbeat every 5 s; silence this long means the connection is dead.
   const SILENCE_LIMIT_MS = 20000;
@@ -55,7 +59,7 @@
   };
 
   const $ = (id) => document.getElementById(id);
-  const SCREENS = ['connecting', 'pair', 'ready', 'waiting', 'player', 'ended'];
+  const SCREENS = ['connecting', 'pair', 'approval', 'ready', 'waiting', 'player', 'ended'];
   const codeInput = $('pair-code');
   const pairButton = $('pair-button');
   const pairError = $('pair-error');
@@ -79,6 +83,8 @@
   let started = false;
   // The phone stopped casting; wait for the user instead of retrying forever.
   let stopped = false;
+  // This laptop may control what everyone is watching; view-only laptops keep their hands off.
+  let canControl = false;
   // The video the phone sent: { token, title }.
   let current = null;
   // Set while the phone converts the video: the MediaSource being fed with its fragments.
@@ -118,6 +124,24 @@
     } catch {
       // Private window or blocked storage: pairing then lasts for this page only.
     }
+  }
+
+  /** This laptop's own name, kept so the phone's list and this screen always agree. */
+  function deviceName() {
+    try {
+      const saved = localStorage.getItem(NAME_KEY);
+      if (saved) return saved;
+    } catch {
+      // Blocked storage: a fresh name each time is still better than none.
+    }
+    const pick = (list) => list[Math.floor(Math.random() * list.length)];
+    const name = `${pick(NAME_FIRST)} ${pick(NAME_SECOND)}`;
+    try {
+      localStorage.setItem(NAME_KEY, name);
+    } catch {
+      // Not remembered; the phone still sees this name for as long as the page is open.
+    }
+    return name;
   }
 
   // Display name only ("Chrome · Linux"); playback decisions use the probed capabilities.
@@ -163,7 +187,7 @@
     socket = ws;
     ws.onopen = () => {
       lastMessageAt = Date.now();
-      send({ type: 'hello', token: readToken(), ...browserInfo(), capabilities: capabilities() });
+      send({ type: 'hello', token: readToken(), deviceName: deviceName(), ...browserInfo(), capabilities: capabilities() });
       startHeartbeat();
     };
     ws.onmessage = (event) => {
@@ -237,9 +261,23 @@
         welcomed = true;
         failedAttempts = 0;
         reconnectDelay = RECONNECT_MIN_MS;
+        canControl = Boolean(message.canControl);
         hideBanner();
         for (const element of document.querySelectorAll('.phone-name')) element.textContent = message.phoneName || 'your phone';
         show(current ? 'player' : started ? 'waiting' : 'ready');
+        updatePlayerUi();
+        break;
+      // Paired, but the phone has not allowed this laptop to watch yet.
+      case 'waiting_approval':
+        welcomed = true;
+        canControl = false;
+        resetMedia();
+        hideBanner();
+        show('approval');
+        break;
+      case 'access':
+        canControl = Boolean(message.canControl);
+        updatePlayerUi();
         break;
       case 'busy':
         end('Too many laptops', `Lucky Player casts to ${message.max || 4} laptops at a time. Close this page on another laptop, then click Reconnect.`);
@@ -501,13 +539,18 @@
 
   function togglePlay() {
     if (!current) return;
+    // Everyone watches the same video, so only a laptop the phone trusts may pause it for the rest.
+    if (!canControl && !stream?.live) {
+      send({ type: 'control', action: 'request', token: current.token });
+      return;
+    }
     if (video.paused || video.ended) playVideo();
     else video.pause();
   }
 
   /** [seconds] is a position in the whole video, which for a converted stream is not the browser's own clock. */
   function seekTo(seconds) {
-    if (!current || !Number.isFinite(seconds)) return;
+    if (!current || !Number.isFinite(seconds) || !canControl) return;
     const target = Math.max(0, seconds);
     if (stream && stream.live) return;
     if (stream) {
@@ -625,7 +668,9 @@
 
     const live = Boolean(stream && stream.live);
     // A converted stream seeks through the phone, so its bar stays usable even though the browser cannot seek.
-    const seekable = canSeek() || Boolean(stream && !stream.live);
+    const seekable = canControl && (canSeek() || Boolean(stream && !stream.live));
+    playToggle.hidden = !canControl && !live;
+    $('view-only').hidden = canControl;
     const durationS = durationSeconds();
     const positionS = seekingByUser ? Number(seek.value) : absolutePositionS();
     const timeText = live ? formatTime(video.currentTime) : `${formatTime(positionS)} / ${formatTime(durationS)}`;
@@ -725,6 +770,8 @@
   });
 
   // endregion
+
+  for (const element of document.querySelectorAll('.device-name')) element.textContent = deviceName();
 
   $('pair-form').addEventListener('submit', (event) => {
     event.preventDefault();

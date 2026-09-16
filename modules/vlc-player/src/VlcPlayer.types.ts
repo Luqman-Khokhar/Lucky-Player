@@ -216,6 +216,12 @@ export type CastReceiver = {
   os: string;
   /** Epoch milliseconds */
   connectedAt: number;
+  /** Entering the code is not permission to watch; the phone allows each laptop. */
+  allowed: boolean;
+  /** Allowed laptops may also play, pause and seek what everyone is watching. */
+  canControl: boolean;
+  /** Receiving the video being cast right now. */
+  watching: boolean;
 };
 
 export type CastState = {

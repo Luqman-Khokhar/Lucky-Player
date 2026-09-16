@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -31,8 +31,8 @@ export function CastScreen({ pending }: CastScreenProps) {
   const cast = useAppSelector((state) => state.cast);
   const actions = useCastActions();
   const { castTo, mirrorScreen } = useCastVideo();
-  const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [castError, setCastError] = useState<string | null>(null);
+  const sentRef = useRef(false);
 
   const mirrorHere = async (receiver: CastReceiver) => {
     setCastError(null);
@@ -40,15 +40,21 @@ export function CastScreen({ pending }: CastScreenProps) {
     if (error) setCastError(error);
   };
 
-  const playHere = async (receiver: CastReceiver) => {
-    if (!pending) return;
-    setSendingTo(receiver.id);
-    setCastError(null);
-    const error = await castTo(receiver.id, pending);
-    setSendingTo(null);
-    if (error) setCastError(error);
-    else router.replace('/cast-remote');
-  };
+  // A video sent from the player waits here only while no laptop is allowed; it starts as soon as one is.
+  useEffect(() => {
+    if (!pending || sentRef.current) return;
+    const allowed = cast.receivers.find((receiver) => receiver.allowed);
+    if (!allowed) return;
+    sentRef.current = true;
+    castTo(allowed.id, pending).then((error) => {
+      if (error) {
+        sentRef.current = false;
+        setCastError(error);
+      } else {
+        router.replace('/cast-remote');
+      }
+    });
+  }, [pending, cast.receivers, castTo, router]);
 
   const renderBody = () => {
     if (cast.starting) {
@@ -91,8 +97,8 @@ export function CastScreen({ pending }: CastScreenProps) {
               </ThemedText>
               <ThemedText type="small" themeColor="textSecondary">
                 {cast.receivers.length > 0
-                  ? 'Choose a laptop below.'
-                  : 'Connect a laptop first with the two steps below. It shows up in the list when it is ready.'}
+                  ? 'Switch on "Let it watch" below and it starts playing there.'
+                  : 'Connect a laptop first with the two steps below, then allow it to watch.'}
               </ThemedText>
               {castError ? (
                 <ThemedText type="small" themeColor="danger">
@@ -107,9 +113,8 @@ export function CastScreen({ pending }: CastScreenProps) {
           <CastReceiverList
             receivers={cast.receivers}
             onForgetLaptops={actions.forgetLaptops}
-            onPlayHere={pending ? playHere : undefined}
+            onAccessChange={actions.setReceiverAccess}
             onMirror={mirrorHere}
-            sendingTo={sendingTo}
           />
           {castError && !pending ? (
             <ThemedText type="small" themeColor="danger">

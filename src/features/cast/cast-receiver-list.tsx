@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Switch, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -11,16 +11,14 @@ import type { CastReceiver } from '@modules/vlc-player';
 type CastReceiverListProps = {
   receivers: CastReceiver[];
   onForgetLaptops: () => void;
-  /** Shows a Play here button per laptop when a video is waiting for one. */
-  onPlayHere?: (receiver: CastReceiver) => void;
+  /** Allows a laptop to watch, and optionally to control what everyone is watching. */
+  onAccessChange: (receiver: CastReceiver, allowed: boolean, canControl: boolean) => void;
   /** Shows a Mirror screen button per laptop. */
   onMirror?: (receiver: CastReceiver) => void;
-  /** Laptop the video is being sent to right now. */
-  sendingTo?: string | null;
 };
 
-/** Laptops connected right now, or a waiting hint while there are none. */
-export function CastReceiverList({ receivers, onForgetLaptops, onPlayHere, onMirror, sendingTo }: CastReceiverListProps) {
+/** Laptops connected right now, what each may do, or a waiting hint while there are none. */
+export function CastReceiverList({ receivers, onForgetLaptops, onAccessChange, onMirror }: CastReceiverListProps) {
   const theme = useTheme();
 
   return (
@@ -40,29 +38,54 @@ export function CastReceiverList({ receivers, onForgetLaptops, onPlayHere, onMir
       ) : (
         <View style={styles.list} accessibilityLiveRegion="polite">
           {receivers.map((receiver) => (
-            <View key={receiver.id} style={styles.row}>
-              <Icon name="laptop" color={theme.text} />
-              <View style={styles.text} accessible accessibilityLabel={`${receiver.name}, connected`}>
-                <ThemedText type="smallBold">{receiver.name}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  Connected
-                </ThemedText>
+            <View key={receiver.id} style={styles.device}>
+              <View style={styles.row}>
+                <Icon name="laptop" color={receiver.allowed ? theme.text : theme.textSecondary} />
+                <View style={styles.text}>
+                  <ThemedText type="smallBold">{receiver.name}</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {receiver.watching ? 'Watching now' : receiver.allowed ? 'Allowed' : 'Waiting for you to allow it'}
+                  </ThemedText>
+                </View>
               </View>
-              {onPlayHere ? (
-                <Button
-                  label={sendingTo === receiver.id ? 'Sending…' : 'Play here'}
-                  disabled={Boolean(sendingTo)}
-                  onPress={() => onPlayHere(receiver)}
-                  accessibilityHint={`Plays the video on ${receiver.name}`}
+
+              <View style={styles.row}>
+                <ThemedText type="small" style={styles.text} nativeID={`allow-${receiver.id}`}>
+                  Let it watch
+                </ThemedText>
+                <Switch
+                  value={receiver.allowed}
+                  onValueChange={(allowed) => onAccessChange(receiver, allowed, allowed && receiver.canControl)}
+                  accessibilityLabel={`Let ${receiver.name} watch`}
                 />
-              ) : null}
+              </View>
+
+              <View style={styles.row}>
+                <ThemedText
+                  type="small"
+                  themeColor={receiver.allowed ? 'text' : 'textSecondary'}
+                  style={styles.text}
+                  nativeID={`control-${receiver.id}`}>
+                  Let it control playback
+                </ThemedText>
+                <Switch
+                  value={receiver.canControl}
+                  disabled={!receiver.allowed}
+                  onValueChange={(canControl) => onAccessChange(receiver, true, canControl)}
+                  accessibilityLabel={`Let ${receiver.name} control playback for everyone`}
+                />
+              </View>
+
               {onMirror ? (
-                <Button
-                  label="Mirror screen"
-                  variant="secondary"
-                  onPress={() => onMirror(receiver)}
-                  accessibilityHint={`Shows everything on this phone's screen on ${receiver.name}`}
-                />
+                <View style={styles.row}>
+                  <Button
+                    label="Mirror screen"
+                    variant="secondary"
+                    disabled={!receiver.allowed}
+                    onPress={() => onMirror(receiver)}
+                    accessibilityHint={`Shows everything on this phone's screen on ${receiver.name}`}
+                  />
+                </View>
               ) : null}
             </View>
           ))}
@@ -86,7 +109,10 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
   list: {
-    gap: Spacing.three,
+    gap: Spacing.four,
+  },
+  device: {
+    gap: Spacing.two,
   },
   row: {
     flexDirection: 'row',

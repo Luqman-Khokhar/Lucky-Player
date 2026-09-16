@@ -31,11 +31,12 @@ export function useCastVideo() {
     }
   }, []);
 
-  /** From the player: straight to the only connected laptop, otherwise the Cast screen to connect or choose one. */
+  /** From the player: straight onto every allowed laptop, otherwise the Cast screen to connect or allow one. */
   const castFromPlayer = useCallback(
     async (request: CastRequest): Promise<string | null> => {
-      if (running && receivers.length === 1) {
-        const error = await castTo(receivers[0].id, request);
+      const allowed = receivers.find((receiver) => receiver.allowed);
+      if (running && allowed) {
+        const error = await castTo(allowed.id, request);
         if (!error) router.replace('/cast-remote');
         return error;
       }

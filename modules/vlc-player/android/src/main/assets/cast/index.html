@@ -26,15 +26,30 @@
       </form>
     </section>
 
+    <section id="screen-approval" class="screen" hidden aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>Waiting for your phone</h1>
+      <p class="muted">
+        This laptop is <strong class="device-name">this laptop</strong>. Allow that name on the Cast screen in Lucky
+        Player and it starts watching here.
+      </p>
+    </section>
+
     <section id="screen-ready" class="screen" hidden>
       <h1>Connected to <span class="phone-name">your phone</span></h1>
-      <p class="muted">Click Start receiving. Your browser needs one click before it can play video with sound.</p>
+      <p class="muted">
+        This laptop is <strong class="device-name">this laptop</strong>. Click Start receiving: your browser needs one
+        click before it can play video with sound.
+      </p>
       <button type="button" id="start-button">Start receiving</button>
     </section>
 
     <section id="screen-waiting" class="screen" hidden>
       <h1>Ready to play</h1>
-      <p class="muted">Choose a video on <span class="phone-name">your phone</span> and tap the cast button. It plays here.</p>
+      <p class="muted">
+        This laptop is <strong class="device-name">this laptop</strong>. Choose a video on
+        <span class="phone-name">your phone</span> and tap the cast button. It plays here.
+      </p>
       <button type="button" id="fullscreen-button" class="secondary">Full screen</button>
     </section>
 
@@ -49,6 +64,7 @@
             <svg id="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
             <svg id="icon-pause" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
           </button>
+          <span id="view-only" class="time muted" hidden>View only</span>
           <span id="time" class="time">0:00 / 0:00</span>
           <label for="seek" class="sr-only">Playback position</label>
           <input type="range" id="seek" min="0" max="0" step="1" value="0" disabled>

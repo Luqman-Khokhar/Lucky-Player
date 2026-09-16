@@ -4,7 +4,7 @@ import { Linking } from 'react-native';
 import { ensureNotificationPermission } from '@/features/sound/notification-permission';
 import { useAppDispatch } from '@/store';
 import { castStartFinished, castStartRequested, castStateChanged, type CastStartError } from '@/store/cast-slice';
-import VlcPlayer from '@modules/vlc-player';
+import VlcPlayer, { type CastReceiver } from '@modules/vlc-player';
 
 function warn(scope: string) {
   return (error: unknown) => console.warn(`[cast] ${scope}`, error);
@@ -44,9 +44,14 @@ export function useCastActions() {
     VlcPlayer.forgetCastReceivers().catch(warn('forget'));
   }, []);
 
+  /** Entering the code is not permission to watch: each laptop is allowed here, and control is separate. */
+  const setReceiverAccess = useCallback((receiver: CastReceiver, allowed: boolean, canControl: boolean) => {
+    VlcPlayer.setCastReceiverAccess(receiver.id, allowed, canControl).catch(warn('access'));
+  }, []);
+
   const openWifiSettings = useCallback(() => {
     Linking.sendIntent('android.settings.WIFI_SETTINGS').catch(() => Linking.openSettings());
   }, []);
 
-  return { start, stop, forgetLaptops, openWifiSettings };
+  return { start, stop, forgetLaptops, setReceiverAccess, openWifiSettings };
 }
