@@ -41,6 +41,10 @@ internal class TranscodeSession(
   @Volatile
   private var bufferedAheadMs = 0L
 
+  /** Laptops receiving this stream; each copy costs the same Wi-Fi again, so they share one budget. */
+  @Volatile
+  private var receiverCount = 1
+
   private var thread: Thread? = null
 
   fun start() {
@@ -66,6 +70,10 @@ internal class TranscodeSession(
 
   fun setBufferedAhead(ms: Long) {
     bufferedAheadMs = ms
+  }
+
+  fun setReceiverCount(count: Int) {
+    receiverCount = count.coerceAtLeast(1)
   }
 
   private fun run() {
@@ -124,6 +132,7 @@ internal class TranscodeSession(
     private val videoDecoder: MediaCodec
     private val videoEncoder: MediaCodec
     private val encoderSurface: Surface
+    private val scaler: GlScaler
     private val audioDecoder: MediaCodec?
     private val audioEncoder: MediaCodec?
 
@@ -152,18 +161,22 @@ internal class TranscodeSession(
       val frameRate = if (videoFormat.containsKey(MediaFormat.KEY_FRAME_RATE)) videoFormat.getInteger(MediaFormat.KEY_FRAME_RATE) else DEFAULT_FRAME_RATE
       frameDurationUs = 1_000_000L / frameRate.coerceIn(1, 120)
 
-      val encoderFormat = encoderFormat(width, height, frameRate)
+      // Converting at 720p rather than the source's own size is what keeps the phone comfortably ahead of playback.
+      val (targetWidth, targetHeight) = targetSize(width, height)
+      val encoderFormat = encoderFormat(targetWidth, targetHeight, frameRate)
       bitrate = BitrateController(encoderFormat.getInteger(MediaFormat.KEY_BIT_RATE), TARGET_AHEAD_MS)
       videoEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
       videoEncoder.configure(encoderFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
       encoderSurface = videoEncoder.createInputSurface()
       videoEncoder.start()
+      scaler = GlScaler(encoderSurface, targetWidth, targetHeight)
+      Log.i(TAG, "Converting ${width}x$height to ${targetWidth}x$targetHeight at $frameRate fps")
 
       // No speed hints on the decoder: MediaTek's H.264 decoder fails outright with them on some files.
       val videoMime = videoFormat.getString(MediaFormat.KEY_MIME)!!
       val decoderName = if (softwareOnly) softwareDecoderFor(videoMime) else null
       videoDecoder = if (decoderName != null) MediaCodec.createByCodecName(decoderName) else MediaCodec.createDecoderByType(videoMime)
-      videoDecoder.configure(videoFormat, encoderSurface, null, 0)
+      videoDecoder.configure(videoFormat, scaler.inputSurface, null, 0)
       videoDecoder.start()
       extractor.selectTrack(videoTrack)
 
@@ -223,13 +236,14 @@ internal class TranscodeSession(
           loggedAt = now
         }
         bitrate?.update(bufferedAheadMs)?.let { target ->
-          Log.i(TAG, "Wi-Fi is keeping up with ${target / 1000} kbps; switching the picture to it")
-          videoEncoder.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, target) })
+          val shared = (target / receiverCount).coerceAtLeast(MIN_SHARED_BITRATE)
+          Log.i(TAG, "Wi-Fi is keeping up with ${target / 1000} kbps; ${shared / 1000} kbps each for $receiverCount laptop(s)")
+          videoEncoder.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, shared) })
         }
         if (startedAt > 0 && now - loggedAt >= STATS_INTERVAL_MS) {
           val seconds = (now - startedAt) / 1000.0
-          Log.i(TAG, "Converted $encodedFrames frames in %.1f s (%.1f fps), laptop buffered %d ms ahead"
-            .format(seconds, encodedFrames / seconds, bufferedAheadMs))
+          Log.i(TAG, "Converted %d frames in %.1f s (%.1f fps), laptops buffered %d ms ahead"
+            .format(encodedFrames, seconds, encodedFrames / seconds, bufferedAheadMs))
           loggedAt = now
         }
       }
@@ -270,13 +284,15 @@ internal class TranscodeSession(
       if (index >= 0) codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
     }
 
-    // Decoded frames go straight to the encoder's surface, so there is no pixel copy here.
+    // Decoded frames go to the scaler, which redraws each one into the encoder at the size we encode.
     private fun drainVideoDecoder(info: MediaCodec.BufferInfo): Boolean {
       if (videoDecoderDone) return false
       val index = videoDecoder.dequeueOutputBuffer(info, 0L)
       if (index < 0) return false
       val endOfStream = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
-      videoDecoder.releaseOutputBuffer(index, info.size > 0)
+      val render = info.size > 0
+      videoDecoder.releaseOutputBuffer(index, render)
+      if (render) scaler.drawFrame(info.presentationTimeUs)
       if (endOfStream) {
         videoDecoderDone = true
         videoEncoder.signalEndOfInputStream()
@@ -389,6 +405,8 @@ internal class TranscodeSession(
     fun release() {
       runCatching { videoDecoder.stop() }
       runCatching { videoDecoder.release() }
+      // After the decoder, so nothing is still drawing into it.
+      runCatching { scaler.release() }
       runCatching { videoEncoder.stop() }
       runCatching { videoEncoder.release() }
       runCatching { encoderSurface.release() }
@@ -416,14 +434,19 @@ internal class TranscodeSession(
     private const val STATS_INTERVAL_MS = 5_000L
     /** How far ahead the laptop should stay; the bitrate follows whether it manages. */
     private const val TARGET_AHEAD_MS = 8_000L
+    /** However many laptops watch, the picture never drops below this. */
+    private const val MIN_SHARED_BITRATE = 700_000
     private const val STOP_TIMEOUT_MS = 2_000L
     private const val DEFAULT_FRAME_RATE = 30
     private const val AAC_SAMPLES_PER_FRAME = 1024L
     private const val AUDIO_BITRATE = 160_000
     private const val I_FRAME_INTERVAL_S = 2
     private const val MAX_OPERATING_RATE = 240
-    /** Above this the phone would have to scale frames, which needs an OpenGL pass we do not have yet. */
-    const val MAX_PIXELS = 1920 * 1088
+    private const val TARGET_LONG_SIDE = 1280.0
+    private const val TARGET_SHORT_SIDE = 720.0
+
+    /** Beyond this the phone's decoder is the limit, whatever we do with the picture afterwards. */
+    const val MAX_PIXELS = 3840 * 2160
 
     fun openSource(extractor: MediaExtractor, context: Context, media: CastMedia) {
       val uri = Uri.parse(media.uri)
@@ -475,5 +498,17 @@ internal class TranscodeSession(
     /** About 6 Mbps for 1080p, scaled by pixel count and kept within a sensible range. */
     private fun bitrateFor(width: Int, height: Int): Int =
       (6_000_000L * width * height / (1920 * 1080)).toInt().coerceIn(1_500_000, 8_000_000)
+
+    /**
+     * What to encode at: 720p-class, keeping the shape of the original and never scaling a smaller video up.
+     * Encoders want even numbers.
+     */
+    fun targetSize(width: Int, height: Int): Pair<Int, Int> {
+      val longest = maxOf(width, height).toDouble()
+      val shortest = minOf(width, height).toDouble()
+      val scale = minOf(1.0, TARGET_LONG_SIDE / longest, TARGET_SHORT_SIDE / shortest)
+      if (scale >= 1.0) return width to height
+      return ((width * scale).toInt() / 2 * 2) to ((height * scale).toInt() / 2 * 2)
+    }
   }
 }

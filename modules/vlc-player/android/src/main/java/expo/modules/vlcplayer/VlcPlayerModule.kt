@@ -118,6 +118,10 @@ class VlcPlayerModule : Module() {
       CastSession.forgetReceivers(context)
     }
 
+    AsyncFunction("setCastReceiverAccess") { receiverId: String, allowed: Boolean, canControl: Boolean ->
+      CastSession.setReceiverAccess(context, receiverId, allowed, canControl)
+    }
+
     AsyncFunction("scanVideos") { promise: Promise ->
       val appContext = context
       scanExecutor.execute {

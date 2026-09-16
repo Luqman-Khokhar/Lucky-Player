@@ -82,6 +82,11 @@ declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
   /** Every laptop must enter the code again; connected laptops are disconnected. */
   forgetCastReceivers(): Promise<void>;
   /**
+   * Lets a laptop watch, and optionally control playback for everyone. Refusing one stops it receiving anything.
+   * Remembered for that laptop until it is forgotten.
+   */
+  setCastReceiverAccess(receiverId: string, allowed: boolean, canControl: boolean): Promise<void>;
+  /**
    * Plays a video in a connected laptop's browser from `startMs`, replacing what was casting. Rejects with
    * ERR_NO_RECEIVER, ERR_OPEN, or ERR_UNSUPPORTED when the browser can't play the file as it is; messages are for users.
    */
