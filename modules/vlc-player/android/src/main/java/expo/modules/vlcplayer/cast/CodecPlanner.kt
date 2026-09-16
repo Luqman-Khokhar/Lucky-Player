@@ -1,6 +1,7 @@
 package expo.modules.vlcplayer.cast
 
 import android.content.Context
+import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
@@ -19,7 +20,16 @@ internal object CodecPlanner {
 
   class Tracks(val video: String?, val audio: String?)
 
-  class Plan(val direct: Boolean, /** What the browser can't play, e.g. "HEVC video in MKV"; empty when direct. */ val blocker: String)
+  enum class Mode {
+    /** The file is served as it is. */
+    DIRECT,
+    /** The phone re-encodes it to H.264 and AAC while casting. */
+    CONVERT,
+    /** Neither works; [Plan.blocker] says what stops it. */
+    REFUSE
+  }
+
+  class Plan(val mode: Mode, /** What the browser can't play, e.g. "HEVC video in MKV"; empty when direct. */ val blocker: String)
 
   private enum class Container(val label: String) { MP4("MP4"), WEBM("WebM"), MKV("MKV") }
 
@@ -46,21 +56,52 @@ internal object CodecPlanner {
       null
     }
 
-  fun plan(media: CastMedia, tracks: Tracks?, capabilities: JSONObject): Plan {
+  /** [blocked] holds codecs this laptop claimed it could play but then failed to decode. */
+  fun plan(media: CastMedia, tracks: Tracks?, capabilities: JSONObject, blocked: Set<String>): Plan {
     val direct = capabilities.optJSONObject("direct") ?: JSONObject()
-    val container = containerOf(media.mimeType) ?: return Plan(false, "${media.mimeType.substringAfter('/').uppercase()} files")
-    // Unknown tracks could mean a video that plays without sound, so it is not sent as is.
-    if (tracks == null || (tracks.video == null && tracks.audio == null)) return Plan(false, "this video's format")
+    val container = containerOf(media.mimeType)
+    // Unknown tracks could mean a video that plays without sound, so it is never sent as it is.
+    if (tracks == null || (tracks.video == null && tracks.audio == null)) {
+      return Plan(Mode.REFUSE, "this video's format")
+    }
+    val alreadyFailed = tracks.video in blocked || tracks.audio in blocked
+    if (!alreadyFailed && container != null && playsAsIs(container, tracks, direct)) return Plan(Mode.DIRECT, "")
 
-    tracks.video?.let { mime ->
-      val key = videoKey(container, mime) ?: return Plan(false, "${codecName(mime)} video in ${container.label}")
-      if (!supported(direct, key)) return Plan(false, "${codecName(mime)} video")
+    // Converting needs the phone to decode what it is given, and a browser plays the H.264 and AAC that come out.
+    val video = tracks.video
+    if (video == null || !canDecode(video)) {
+      return Plan(Mode.REFUSE, "${codecName(video ?: "")} video".trim())
     }
-    tracks.audio?.let { mime ->
-      val key = audioKey(mime) ?: return Plan(false, "${codecName(mime)} audio")
-      if (!supported(direct, key)) return Plan(false, "${codecName(mime)} audio")
+    val audio = tracks.audio
+    if (audio != null && !canDecode(audio)) return Plan(Mode.REFUSE, "${codecName(audio)} audio")
+    return Plan(Mode.CONVERT, "")
+  }
+
+  private fun playsAsIs(container: Container, tracks: Tracks, direct: JSONObject): Boolean {
+    val video = tracks.video
+    if (video != null) {
+      val key = videoKey(container, video) ?: return false
+      if (!supported(direct, key)) return false
     }
-    return Plan(true, "")
+    val audio = tracks.audio
+    if (audio != null) {
+      val key = audioKey(audio) ?: return false
+      if (!supported(direct, key)) return false
+    }
+    return true
+  }
+
+  /** Whether this phone has a decoder for the codec; Dolby and DTS audio are missing on most phones. */
+  private fun canDecode(mime: String): Boolean {
+    if (mime.startsWith(MATROSKA_PREFIX)) return false
+    return try {
+      MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { info ->
+        !info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) }
+      }
+    } catch (e: RuntimeException) {
+      Log.w(TAG, "Could not list decoders", e)
+      false
+    }
   }
 
   private fun extractorTracks(context: Context, uri: String): Tracks? {

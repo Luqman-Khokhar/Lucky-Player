@@ -7,6 +7,7 @@ import android.content.pm.ServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 
 /**
@@ -15,6 +16,7 @@ import android.util.Log
  */
 class CastService : Service() {
   private var wifiLock: WifiManager.WifiLock? = null
+  private var wakeLock: PowerManager.WakeLock? = null
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -31,6 +33,7 @@ class CastService : Service() {
       return START_NOT_STICKY
     }
     holdWifi()
+    holdCpu()
     // After the process dies the server is gone too, so a restarted service would have nothing to keep alive.
     return START_NOT_STICKY
   }
@@ -38,6 +41,8 @@ class CastService : Service() {
   override fun onDestroy() {
     wifiLock?.takeIf { it.isHeld }?.release()
     wifiLock = null
+    wakeLock?.takeIf { it.isHeld }?.release()
+    wakeLock = null
     stopForeground(STOP_FOREGROUND_REMOVE)
     super.onDestroy()
   }
@@ -72,11 +77,22 @@ class CastService : Service() {
     }
   }
 
+  // Serving and converting video have to keep running while the phone's screen is off.
+  private fun holdCpu() {
+    if (wakeLock?.isHeld == true) return
+    val manager = applicationContext.getSystemService(PowerManager::class.java) ?: return
+    wakeLock = manager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG).apply {
+      setReferenceCounted(false)
+      acquire()
+    }
+  }
+
   companion object {
     const val ACTION_STOP = "expo.modules.vlcplayer.cast.STOP"
 
     private const val TAG = "CastService"
     private const val WIFI_LOCK_TAG = "LuckyPlayer:cast"
+    private const val WAKE_LOCK_TAG = "LuckyPlayer:cast-cpu"
 
     fun start(context: Context) {
       val intent = Intent(context, CastService::class.java)

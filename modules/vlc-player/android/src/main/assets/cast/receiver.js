@@ -1,7 +1,7 @@
 'use strict';
 
-// Lucky Player laptop receiver: pairs with the phone over a WebSocket and plays the videos it sends.
-// No build step, no libraries. The phone controls playback; this page reports what the video element does.
+// Lucky Player laptop receiver: pairs with the phone over a WebSocket and plays the videos it sends, either the file
+// itself or a stream the phone converts on the fly. No build step, no libraries.
 (() => {
   const TOKEN_KEY = 'lucky-player-cast-token';
   const HEARTBEAT_MS = 5000;
@@ -14,6 +14,10 @@
   const STATE_REPORT_MS = 1000;
   const CONTROLS_HIDE_MS = 3000;
   const SEEK_STEP_S = 10;
+  // Seconds of converted video kept behind the playhead when the browser runs out of buffer space.
+  const KEEP_BEHIND_S = 15;
+  // How much converted video to collect before playback starts.
+  const PREBUFFER_MS = 4000;
 
   // Probed once and reported to the phone, which decides per video whether the file can be sent as is.
   const DIRECT_TYPES = {
@@ -69,6 +73,8 @@
   let stopped = false;
   // The video the phone sent: { token, title }.
   let current = null;
+  // Set while the phone converts the video: the MediaSource being fed with its fragments.
+  let stream = null;
   // Where the video starts once its metadata loads; also reported as the position until then.
   let pendingStartS = null;
   let seekingByUser = false;
@@ -128,9 +134,11 @@
     const direct = {};
     for (const [key, type] of Object.entries(DIRECT_TYPES)) direct[key] = probe.canPlayType(type);
     const Source = window.MediaSource || window.ManagedMediaSource;
-    const stream = {};
-    for (const [key, type] of Object.entries(STREAM_TYPES)) stream[key] = Boolean(Source && Source.isTypeSupported(type));
-    return { direct, stream };
+    const streamTypes = {};
+    for (const [key, type] of Object.entries(STREAM_TYPES)) {
+      streamTypes[key] = Boolean(Source && Source.isTypeSupported(type));
+    }
+    return { direct, stream: streamTypes };
   }
 
   // region Connection
@@ -143,6 +151,7 @@
     clearTimeout(reconnectTimer);
     if (socket) return;
     const ws = new WebSocket(`ws://${location.host}/ws`);
+    ws.binaryType = 'arraybuffer';
     socket = ws;
     ws.onopen = () => {
       lastMessageAt = Date.now();
@@ -151,7 +160,10 @@
     };
     ws.onmessage = (event) => {
       lastMessageAt = Date.now();
-      if (typeof event.data !== 'string') return;
+      if (typeof event.data !== 'string') {
+        appendChunk(event.data);
+        return;
+      }
       let message;
       try {
         message = JSON.parse(event.data);
@@ -239,6 +251,12 @@
       case 'seek':
         seekTo(Number(message.ms) / 1000);
         break;
+      case 'stream_end':
+        if (stream) {
+          stream.ended = true;
+          appendNext();
+        }
+        break;
       case 'stop':
         resetMedia();
         show(started ? 'waiting' : 'ready');
@@ -299,24 +317,115 @@
   // region Playback
 
   function loadMedia(message) {
-    const url = String(message.url || '');
-    const token = url.split('/').pop();
-    if (current && current.token === token && video.getAttribute('src') === url) {
+    const token = String(message.token || '');
+    const converted = message.kind === 'stream';
+    if (!converted && current && current.token === token && video.getAttribute('src') === message.url) {
       // Reconnected mid-video: this page kept playing, so only the phone needs the current state.
       report();
       return;
     }
-    current = { token, title: String(message.title || 'Video') };
+    resetMedia();
+    current = { token, title: String(message.title || 'Video'), converted };
     $('video-title').textContent = current.title;
     document.title = `${current.title} · Lucky Player`;
-    pendingStartS = Math.max(0, Number(message.startMs) || 0) / 1000;
-    tapToPlay.hidden = true;
     show('player');
     showControls();
-    video.src = url;
-    video.load();
+    if (converted) startConvertedStream(message);
+    else startDirectFile(message);
     updatePlayerUi();
     report();
+  }
+
+  function startDirectFile(message) {
+    pendingStartS = Math.max(0, Number(message.startMs) || 0) / 1000;
+    video.src = message.url;
+    video.load();
+  }
+
+  // The phone sends an init segment, then a fragment per second of video, as binary WebSocket messages.
+  function startConvertedStream(message) {
+    const Source = window.MediaSource || window.ManagedMediaSource;
+    if (!Source) {
+      setStatus("This browser can't play converted video.");
+      return;
+    }
+    const mediaSource = new Source();
+    stream = {
+      mediaSource,
+      sourceBuffer: null,
+      queue: [],
+      ended: false,
+      playing: false,
+      mimeType: String(message.mimeType || STREAM_TYPES['fmp4-h264-aac']),
+      startMs: Math.max(0, Number(message.startMs) || 0),
+      durationMs: Math.max(0, Number(message.durationMs) || 0),
+      url: URL.createObjectURL(mediaSource),
+    };
+    mediaSource.addEventListener('sourceopen', () => {
+      if (!stream || stream.mediaSource !== mediaSource) return;
+      try {
+        stream.sourceBuffer = mediaSource.addSourceBuffer(stream.mimeType);
+        stream.sourceBuffer.addEventListener('updateend', appendNext);
+        if (stream.durationMs > 0) mediaSource.duration = stream.durationMs / 1000;
+      } catch (error) {
+        setStatus("This browser can't play the converted video.");
+        return;
+      }
+      appendNext();
+    }, { once: true });
+    video.src = stream.url;
+    video.load();
+    // Playback waits for a cushion; starting on the first fragment stalls again a second later.
+    setStatus('Loading…');
+  }
+
+  function appendChunk(data) {
+    if (!stream) return;
+    stream.queue.push(new Uint8Array(data));
+    appendNext();
+  }
+
+  function appendNext() {
+    if (!stream || !stream.sourceBuffer || stream.sourceBuffer.updating) return;
+    if (stream.queue.length === 0) {
+      if (stream.ended && stream.mediaSource.readyState === 'open') {
+        try {
+          stream.mediaSource.endOfStream();
+        } catch {
+          // Already ended.
+        }
+      }
+      return;
+    }
+    const chunk = stream.queue.shift();
+    try {
+      stream.sourceBuffer.appendBuffer(chunk);
+      startWhenBuffered();
+    } catch (error) {
+      if (error && error.name === 'QuotaExceededError') {
+        stream.queue.unshift(chunk);
+        dropOldBuffer();
+        return;
+      }
+      setStatus("The converted video couldn't be played.");
+    }
+  }
+
+  function startWhenBuffered() {
+    if (!stream || stream.playing) return;
+    if (bufferedAheadMs() < PREBUFFER_MS && !stream.ended) return;
+    stream.playing = true;
+    setStatus('');
+    playVideo();
+  }
+
+  // Long videos fill the browser's buffer; the part already watched is what goes.
+  function dropOldBuffer() {
+    const buffer = stream.sourceBuffer;
+    if (!buffer || buffer.updating || buffer.buffered.length === 0) return;
+    const start = buffer.buffered.start(0);
+    const keepFrom = Math.max(start, video.currentTime - KEEP_BEHIND_S);
+    if (keepFrom > start) buffer.remove(start, keepFrom);
   }
 
   function playVideo() {
@@ -343,9 +452,16 @@
     else video.pause();
   }
 
+  /** [seconds] is a position in the whole video, which for a converted stream is not the browser's own clock. */
   function seekTo(seconds) {
     if (!current || !Number.isFinite(seconds)) return;
     const target = Math.max(0, seconds);
+    if (stream) {
+      // Only what the phone already sent exists here, so it converts again from the new position.
+      send({ type: 'control', action: 'seek', token: current.token, ms: Math.round(target * 1000) });
+      setStatus('Loading…');
+      return;
+    }
     if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
       pendingStartS = target;
       return;
@@ -358,12 +474,36 @@
     pendingStartS = null;
     video.pause();
     video.removeAttribute('src');
+    if (stream) {
+      if (stream.sourceBuffer) stream.sourceBuffer.removeEventListener('updateend', appendNext);
+      URL.revokeObjectURL(stream.url);
+      stream = null;
+    }
     video.load();
     tapToPlay.hidden = true;
     playerStatus.hidden = true;
     document.title = 'Lucky Player';
     clearTimeout(idleTimer);
     player.classList.remove('idle');
+  }
+
+  /** Position in the whole video, in seconds. */
+  function absolutePositionS() {
+    if (stream) return stream.startMs / 1000 + video.currentTime;
+    if (pendingStartS !== null) return pendingStartS;
+    return video.currentTime;
+  }
+
+  function durationSeconds() {
+    if (stream) return stream.durationMs / 1000;
+    return Number.isFinite(video.duration) ? video.duration : 0;
+  }
+
+  function bufferedAheadMs() {
+    const buffered = video.buffered;
+    if (!buffered || buffered.length === 0) return 0;
+    const end = buffered.end(buffered.length - 1);
+    return Math.max(0, Math.round((end - video.currentTime) * 1000));
   }
 
   function statusNow() {
@@ -379,23 +519,29 @@
     return (video.error && MEDIA_ERRORS[video.error.code]) || "The video couldn't play.";
   }
 
-  function durationSeconds() {
-    return Number.isFinite(video.duration) ? video.duration : 0;
-  }
-
   function report() {
     if (!current) return;
     const status = statusNow();
-    const positionS = pendingStartS !== null ? pendingStartS : video.currentTime;
     const message = {
       type: 'state',
       token: current.token,
       status,
-      positionMs: Math.round(positionS * 1000),
+      // For a converted stream the phone adds where conversion started.
+      positionMs: Math.round((stream ? video.currentTime : absolutePositionS()) * 1000),
       durationMs: Math.round(durationSeconds() * 1000),
+      bufferedAheadMs: bufferedAheadMs(),
     };
-    if (status === 'error') message.error = errorText();
+    if (status === 'error') {
+      message.error = errorText();
+      // 3 (decode) and 4 (unsupported) mean canPlayType was too optimistic; the phone converts instead.
+      message.errorCode = video.error ? video.error.code : 0;
+    }
     send(message);
+  }
+
+  function setStatus(text) {
+    playerStatus.textContent = text;
+    playerStatus.hidden = !text || !tapToPlay.hidden;
   }
 
   function formatTime(seconds) {
@@ -415,7 +561,7 @@
     $('icon-pause').toggleAttribute('hidden', !playing);
 
     const durationS = durationSeconds();
-    const positionS = seekingByUser ? Number(seek.value) : (pendingStartS ?? video.currentTime);
+    const positionS = seekingByUser ? Number(seek.value) : absolutePositionS();
     const timeText = `${formatTime(positionS)} / ${formatTime(durationS)}`;
     $('time').textContent = timeText;
     seek.max = String(Math.max(0, Math.floor(durationS)));
@@ -423,9 +569,7 @@
     seek.setAttribute('aria-valuetext', timeText);
     seek.disabled = durationS <= 0;
 
-    const text = status === 'error' ? errorText() : status === 'loading' ? 'Loading…' : status === 'buffering' ? 'Buffering…' : '';
-    playerStatus.textContent = text;
-    playerStatus.hidden = !text || !tapToPlay.hidden;
+    setStatus(status === 'error' ? errorText() : status === 'loading' ? 'Loading…' : status === 'buffering' ? 'Buffering…' : '');
     if (!playing) showControls();
   }
 
@@ -501,7 +645,7 @@
       togglePlay();
     } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && target !== seek) {
       event.preventDefault();
-      seekTo(video.currentTime + (event.key === 'ArrowLeft' ? -SEEK_STEP_S : SEEK_STEP_S));
+      seekTo(absolutePositionS() + (event.key === 'ArrowLeft' ? -SEEK_STEP_S : SEEK_STEP_S));
     } else if (event.key === 'f' && !inControl) {
       toggleFullscreen();
     }
