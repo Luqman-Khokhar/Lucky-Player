@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StateView } from '@/components/ui/state-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useGoBack } from '@/hooks/use-go-back';
 import { useAppSelector } from '@/store';
 import type { CastReceiver } from '@modules/vlc-player';
 
@@ -25,6 +26,7 @@ type CastScreenProps = {
 
 export function CastScreen({ pending }: CastScreenProps) {
   const router = useRouter();
+  const goBack = useGoBack();
   const insets = useSafeAreaInsets();
   const cast = useAppSelector((state) => state.cast);
   const actions = useCastActions();
@@ -110,7 +112,7 @@ export function CastScreen({ pending }: CastScreenProps) {
 
   return (
     <ThemedView style={styles.root}>
-      <ScreenHeader title="Cast" subtitle="Play on a laptop, nothing to install" onBack={() => router.back()} />
+      <ScreenHeader title="Cast" subtitle="Play on a laptop, nothing to install" onBack={goBack} />
       {renderBody()}
     </ThemedView>
   );

@@ -1,4 +1,3 @@
-import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +10,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatTime } from '@/features/player/format-time';
 import { SKIP_ICONS } from '@/features/player/player-controls';
 import { SeekBar } from '@/features/player/seek-bar';
+import { useGoBack } from '@/hooks/use-go-back';
 import { useTheme } from '@/hooks/use-theme';
 
 import { castStatusText, isCastBusy } from './cast-playback-status';
@@ -18,7 +18,7 @@ import { useCastRemote } from './use-cast-remote';
 
 /** Phone remote while a laptop plays the video. Dark like the player, whatever the app theme. */
 export function CastRemoteScreen() {
-  const router = useRouter();
+  const goBack = useGoBack();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const remote = useCastRemote();
@@ -42,7 +42,7 @@ export function CastRemoteScreen() {
       ]}>
       <StatusBar style="light" />
       <View style={styles.header}>
-        <IconButton icon="arrow_back" label="Back" {...colors} onPress={() => router.back()} />
+        <IconButton icon="arrow_back" label="Back" {...colors} onPress={goBack} />
         <ThemedText type="smallBold" numberOfLines={1} style={[styles.headerText, { color: theme.playerTextSecondary }]}>
           {playback ? `Casting to ${playback.receiverName}` : 'Cast'}
         </ThemedText>
@@ -115,7 +115,7 @@ export function CastRemoteScreen() {
           <ThemedText type="small" style={[styles.status, { color: theme.playerTextSecondary }]}>
             Open a video and tap the cast button in the player to play it on a laptop.
           </ThemedText>
-          <Button label="Go back" onPress={() => router.back()} />
+          <Button label="Go back" onPress={goBack} />
         </View>
       )}
     </View>
