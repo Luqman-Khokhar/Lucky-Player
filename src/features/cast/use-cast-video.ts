@@ -24,7 +24,7 @@ export function useCastVideo() {
       await savePlaybackState(request.uri, request.startMs, request.durationMs).catch(() => undefined);
     }
     try {
-      await VlcPlayer.castMedia(receiverId, request.uri, request.title, request.startMs);
+      await VlcPlayer.castMedia(receiverId, request.uri, request.title, request.startMs, request.durationMs);
       return null;
     } catch (cause) {
       return messageOf(cause);

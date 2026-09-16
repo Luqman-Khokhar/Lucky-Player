@@ -334,7 +334,14 @@
       return;
     }
     resetMedia();
-    current = { token, title: String(message.title || 'Video'), converted, live: message.kind === 'screen' };
+    current = {
+      token,
+      title: String(message.title || 'Video'),
+      converted,
+      live: message.kind === 'screen',
+      // The phone measured the file; browsers often cannot work out an MKV's length.
+      durationMs: Math.max(0, Number(message.durationMs) || 0),
+    };
     $('video-title').textContent = current.title;
     document.title = `${current.title} · Lucky Player`;
     show('player');
@@ -544,7 +551,14 @@
 
   function durationSeconds() {
     if (stream) return stream.durationMs / 1000;
-    return Number.isFinite(video.duration) ? video.duration : 0;
+    if (Number.isFinite(video.duration) && video.duration > 0) return video.duration;
+    return current && current.durationMs ? current.durationMs / 1000 : 0;
+  }
+
+  /** Whether this browser can actually jump around in what it was sent. */
+  function canSeek() {
+    if (stream) return false;
+    return video.seekable.length > 0 && Number.isFinite(video.duration) && video.duration > 0;
   }
 
   function bufferedAheadMs() {
@@ -578,6 +592,7 @@
       positionMs: Math.round((stream ? video.currentTime : absolutePositionS()) * 1000),
       durationMs: Math.round(durationSeconds() * 1000),
       bufferedAheadMs: bufferedAheadMs(),
+      seekable: canSeek(),
     };
     if (status === 'error') {
       message.error = errorText();
@@ -609,6 +624,8 @@
     $('icon-pause').toggleAttribute('hidden', !playing);
 
     const live = Boolean(stream && stream.live);
+    // A converted stream seeks through the phone, so its bar stays usable even though the browser cannot seek.
+    const seekable = canSeek() || Boolean(stream && !stream.live);
     const durationS = durationSeconds();
     const positionS = seekingByUser ? Number(seek.value) : absolutePositionS();
     const timeText = live ? formatTime(video.currentTime) : `${formatTime(positionS)} / ${formatTime(durationS)}`;
@@ -617,7 +634,7 @@
     seek.max = String(Math.max(0, Math.floor(durationS)));
     if (!seekingByUser) seek.value = String(Math.floor(positionS));
     seek.setAttribute('aria-valuetext', timeText);
-    seek.disabled = live || durationS <= 0;
+    seek.disabled = live || durationS <= 0 || !seekable;
 
     setStatus(status === 'error' ? errorText() : status === 'loading' ? 'Loading…' : status === 'buffering' ? 'Buffering…' : '');
     if (!playing) showControls();

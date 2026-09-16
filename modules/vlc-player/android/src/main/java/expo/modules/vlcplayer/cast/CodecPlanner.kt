@@ -159,11 +159,17 @@ internal object CodecPlanner {
     else -> null
   }
 
-  // Keys match DIRECT_TYPES in assets/cast/receiver.js.
+  /**
+   * Keys match DIRECT_TYPES in assets/cast/receiver.js.
+   *
+   * Matroska never qualifies. Browsers play some MKV files without officially supporting the container, and their
+   * timeline is then wrong: the position runs away and seeking lands somewhere else. Converting costs battery but
+   * puts the timestamps under the phone's control, so the remote and the laptop's own bar both work.
+   */
   private fun videoKey(container: Container, mime: String): String? = when (mime) {
     MediaFormat.MIMETYPE_VIDEO_AVC -> when (container) {
       Container.MP4 -> "mp4-h264-aac"
-      Container.MKV -> "mkv-h264-aac"
+      Container.MKV -> null
       Container.WEBM -> null
     }
     MediaFormat.MIMETYPE_VIDEO_HEVC -> "mp4-hevc".takeIf { container == Container.MP4 }

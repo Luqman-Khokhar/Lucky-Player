@@ -51,11 +51,11 @@ class VlcPlayerModule : Module() {
       CastSession.playbackListener = null
     }
 
-    AsyncFunction("castMedia") { receiverId: String, uri: String, title: String, startMs: Double, promise: Promise ->
+    AsyncFunction("castMedia") { receiverId: String, uri: String, title: String, startMs: Double, durationMs: Double, promise: Promise ->
       val appContext = context
       castExecutor.execute {
         try {
-          CastSession.castMedia(appContext, receiverId, uri, title, startMs.toLong())
+          CastSession.castMedia(appContext, receiverId, uri, title, startMs.toLong(), durationMs.toLong())
           promise.resolve(null)
         } catch (e: CastSession.CastException) {
           promise.reject(e.code, e.message ?: "Could not cast this video", e)

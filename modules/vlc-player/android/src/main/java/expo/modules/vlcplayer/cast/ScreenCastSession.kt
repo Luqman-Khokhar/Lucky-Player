@@ -36,6 +36,15 @@ internal class ScreenCastSession(
   @Volatile
   private var bufferedAheadMs = 0L
 
+  /** Paused mirroring keeps the capture open but sends nothing, so the phone stops working and the laptop holds. */
+  @Volatile
+  var paused = false
+    private set
+
+  @Volatile
+  var muted = false
+    private set
+
   private val handler = Handler(Looper.getMainLooper())
   private val lock = Any()
 
@@ -127,6 +136,29 @@ internal class ScreenCastSession(
     bufferedAheadMs = ms
   }
 
+  fun setPaused(value: Boolean) {
+    if (paused == value) return
+    paused = value
+    synchronized(lock) {
+      pendingVideo.clear()
+      pendingAudio.clear()
+      fragmentUs = 0L
+    }
+    // The laptop needs a fresh full picture to start from when sharing continues.
+    if (!value) requestKeyframe()
+  }
+
+  fun setMuted(value: Boolean) {
+    muted = value
+  }
+
+  private fun requestKeyframe() {
+    val encoder = videoEncoder ?: return
+    runCatching {
+      encoder.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) })
+    }
+  }
+
   // Only audio this app and other media apps play; a phone call or notification sound is never captured.
   @SuppressLint("MissingPermission")
   private fun startAudio() {
@@ -212,6 +244,8 @@ internal class ScreenCastSession(
     val info = MediaCodec.BufferInfo()
     while (running) {
       val read = record.read(buffer, 0, buffer.size)
+      // Muted sends silence rather than nothing: a missing audio track would stall the laptop's playback.
+      if (read > 0 && muted) buffer.fill(0, 0, read)
       if (read > 0) {
         // The encoder's input buffers are smaller than one read, so a read is spread over as many as it takes.
         val readAtUs = System.nanoTime() / 1000L
@@ -253,6 +287,7 @@ internal class ScreenCastSession(
   }
 
   private fun addVideo(data: ByteArray, ptsUs: Long, keyframe: Boolean) {
+    if (paused) return
     var fragment: ByteArray? = null
     synchronized(lock) {
       if (writer == null) return
@@ -268,6 +303,7 @@ internal class ScreenCastSession(
   }
 
   private fun addAudio(data: ByteArray, ptsUs: Long) {
+    if (paused) return
     synchronized(lock) {
       if (writer == null || baseTimeUs < 0) return
       val time = (ptsUs - baseTimeUs).coerceAtLeast(0L)

@@ -81,7 +81,27 @@ export function CastRemoteScreen() {
           </View>
           )}
 
-          {mirroring ? null : (
+          {mirroring ? (
+          <View style={styles.controls}>
+            <IconButton
+              icon={remote.muted ? 'volume_off' : 'volume_up'}
+              label={remote.muted ? 'Unmute the laptop' : 'Mute the laptop'}
+              size="lg"
+              disabled={!connected}
+              {...colors}
+              onPress={remote.toggleMute}
+            />
+            <IconButton
+              icon={remote.playing ? 'pause' : 'play_arrow'}
+              label={remote.playing ? 'Pause sharing' : 'Resume sharing'}
+              size="xl"
+              backgroundColor={theme.playerScrim}
+              disabled={!connected}
+              {...colors}
+              onPress={remote.togglePlay}
+            />
+          </View>
+          ) : (
           <View style={styles.controls}>
             <IconButton icon="skip_previous" label="Previous video" disabled={!remote.playPrevious} {...colors} onPress={() => remote.playPrevious?.()} />
             <IconButton icon={rewindIcon} label={`Rewind ${skipSeconds} seconds`} size="lg" disabled={!connected} {...colors} onPress={() => remote.skip(-remote.seekStepMs)} />

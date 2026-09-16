@@ -243,13 +243,16 @@ export type CastPlayback = {
   uri: string;
   title: string;
   status: CastPlaybackStatus;
+  /** Mirroring only: the captured sound is being replaced with silence. */
+  muted: boolean;
   positionMs: number;
   durationMs: number;
   /** Set when status is `error` */
   error: string | null;
 };
 
-export type CastControlAction = 'play' | 'pause' | 'seek' | 'stop';
+/** `mute` and `unmute` apply to mirroring only. */
+export type CastControlAction = 'play' | 'pause' | 'seek' | 'stop' | 'mute' | 'unmute';
 
 export type MediaInfo = {
   duration: number;

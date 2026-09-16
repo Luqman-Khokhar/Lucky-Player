@@ -12,6 +12,8 @@ import { useCastVideo } from './use-cast-video';
 const SAVE_INTERVAL_MS = 5000;
 // A seek shows its target until the laptop's next reports catch up.
 const SEEK_HOLD_MS = 1500;
+// Presses within this window collapse into one seek.
+const SEEK_DEBOUNCE_MS = 400;
 const NOTICE_MS = 4000;
 
 function warn(scope: string) {
@@ -40,6 +42,7 @@ export function useCastRemote() {
   const [notice, setNotice] = useState<string | null>(null);
   const playbackRef = useRef(playback);
   const endedUriRef = useRef<string | null>(null);
+  const seekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     playbackRef.current = playback;
@@ -81,9 +84,15 @@ export function useCastRemote() {
       const current = playbackRef.current;
       if (!current) return;
       await saveProgress(current);
-      const saved = resumePlayback ? await getPlaybackState(item.uri).catch(() => null) : null;
-      const startMs = resumePosition(saved, saved?.duration ?? 0);
-      const error = await castTo(current.receiverId, { uri: item.uri, title: item.title, startMs, durationMs: 0 });
+      // The saved state carries the length from when the video was played on the phone.
+      const saved = await getPlaybackState(item.uri).catch(() => null);
+      const startMs = resumePlayback ? resumePosition(saved, saved?.duration ?? 0) : 0;
+      const error = await castTo(current.receiverId, {
+        uri: item.uri,
+        title: item.title,
+        startMs,
+        durationMs: saved?.duration ?? 0,
+      });
       if (error) setNotice(error);
     },
     [castTo, resumePlayback]
@@ -101,12 +110,21 @@ export function useCastRemote() {
     if (autoPlayNext && next) playItem(next);
   }, [ended, uri, autoPlayNext, next, playItem]);
 
+  // Tapping skip several times must land one seek, not one per tap: a converted video starts again at each seek.
   const seekTo = useCallback((positionMs: number) => {
     const current = playbackRef.current;
     if (!current) return;
     const target = Math.max(0, current.durationMs > 0 ? Math.min(positionMs, current.durationMs) : positionMs);
     setSeekTarget(target);
-    control('seek', target);
+    if (seekTimerRef.current) clearTimeout(seekTimerRef.current);
+    seekTimerRef.current = setTimeout(() => {
+      seekTimerRef.current = null;
+      control('seek', target);
+    }, SEEK_DEBOUNCE_MS);
+  }, []);
+
+  useEffect(() => () => {
+    if (seekTimerRef.current) clearTimeout(seekTimerRef.current);
   }, []);
 
   const position = seekTarget ?? playback?.positionMs ?? 0;
@@ -114,6 +132,9 @@ export function useCastRemote() {
 
   const skip = useCallback((deltaMs: number) => seekTo(position + deltaMs), [position, seekTo]);
   const togglePlay = useCallback(() => control(playing ? 'pause' : 'play'), [playing]);
+
+  const muted = playback?.muted ?? false;
+  const toggleMute = useCallback(() => control(muted ? 'unmute' : 'mute'), [muted]);
 
   const playOnPhone = useCallback(async () => {
     const current = playbackRef.current;
@@ -137,6 +158,8 @@ export function useCastRemote() {
     playing,
     seekStepMs: seekStepSec * 1000,
     notice,
+    muted,
+    toggleMute,
     togglePlay,
     seekTo,
     skip,

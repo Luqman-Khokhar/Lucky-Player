@@ -85,7 +85,8 @@ declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
    * Plays a video in a connected laptop's browser from `startMs`, replacing what was casting. Rejects with
    * ERR_NO_RECEIVER, ERR_OPEN, or ERR_UNSUPPORTED when the browser can't play the file as it is; messages are for users.
    */
-  castMedia(receiverId: string, uri: string, title: string, startMs: number): Promise<void>;
+  /** `durationMs` is what the app already knows, used when the phone cannot measure the file (0 when unknown). */
+  castMedia(receiverId: string, uri: string, title: string, startMs: number, durationMs: number): Promise<void>;
   /** `positionMs` is used by seek only. */
   castControl(action: CastControlAction, positionMs: number): Promise<void>;
   getCastPlayback(): Promise<CastPlayback | null>;

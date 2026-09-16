@@ -3,6 +3,7 @@ package expo.modules.vlcplayer.cast
 import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
@@ -51,10 +52,16 @@ internal class TranscodeSession(
     }
   }
 
+  /**
+   * Blocks until the worker has left its loop. The codecs are released by that worker, so returning earlier would
+   * let a new session tear them down while this one is still using them.
+   */
   fun stop() {
     running = false
-    thread?.join(STOP_TIMEOUT_MS)
+    val worker = thread
     thread = null
+    worker?.join(STOP_TIMEOUT_MS)
+    if (worker != null && worker.isAlive) Log.w(TAG, "Converter did not stop in time")
   }
 
   fun setBufferedAhead(ms: Long) {
@@ -62,28 +69,55 @@ internal class TranscodeSession(
   }
 
   private fun run() {
-    var pipeline: Pipeline? = null
     try {
-      pipeline = Pipeline(context, media, startUs)
-      pipeline.run()
-      if (running) listener.onEnded()
-    } catch (e: IOException) {
-      Log.w(TAG, "Conversion failed", e)
-      if (running) listener.onError("The phone couldn't read this video for casting.")
-    } catch (e: MediaCodec.CodecException) {
-      Log.w(TAG, "Codec failed", e)
-      if (running) listener.onError("The phone couldn't convert this video.")
-    } catch (e: IllegalStateException) {
-      Log.w(TAG, "Conversion stopped", e)
-      if (running) listener.onError("The phone couldn't convert this video.")
+      // The phone's own decoder fails on some files; the slower software one usually manages them.
+      if (!attempt(softwareOnly = false) && running) {
+        Log.i(TAG, "Retrying the conversion with a software decoder")
+        attempt(softwareOnly = true)
+      }
     } finally {
-      pipeline?.release()
       running = false
     }
   }
 
+  /** False when it failed before producing anything, which is worth retrying with another decoder. */
+  private fun attempt(softwareOnly: Boolean): Boolean {
+    var pipeline: Pipeline? = null
+    return try {
+      pipeline = Pipeline(context, media, startUs, softwareOnly)
+      pipeline.run()
+      // A converter stopped for a seek or a new video has not reached the end of anything.
+      if (running) listener.onEnded()
+      true
+    } catch (e: IOException) {
+      Log.w(TAG, "Conversion failed", e)
+      if (running) listener.onError("The phone couldn't read this video for casting.")
+      true
+    } catch (e: RuntimeException) {
+      // Stopping releases the codecs, so a call that lands just after that is the tear-down, not a failure.
+      if (!running) {
+        Log.i(TAG, "Converter stopped while working: ${e.message}")
+        return true
+      }
+      if (!softwareOnly && pipeline?.producedOutput != true) {
+        Log.w(TAG, "Converting failed before any picture came out", e)
+        return false
+      }
+      Log.w(TAG, "Conversion failed", e)
+      listener.onError("The phone couldn't convert this video.")
+      true
+    } finally {
+      pipeline?.release()
+    }
+  }
+
   /** Everything that has to be released together; created and used on the worker thread only. */
-  private inner class Pipeline(context: Context, media: CastMedia, startUs: Long) {
+  private inner class Pipeline(context: Context, media: CastMedia, startUs: Long, private val softwareOnly: Boolean) {
+    /** Once anything has been encoded, a later failure is a real one rather than a codec that cannot open this file. */
+    @Volatile
+    var producedOutput = false
+      private set
+
     private val extractor = MediaExtractor()
     private val videoTrack: Int
     private val audioTrack: Int
@@ -125,9 +159,10 @@ internal class TranscodeSession(
       encoderSurface = videoEncoder.createInputSurface()
       videoEncoder.start()
 
-      videoDecoder = MediaCodec.createDecoderByType(videoFormat.getString(MediaFormat.KEY_MIME)!!)
-      videoFormat.setInteger(MediaFormat.KEY_PRIORITY, 0)
-      videoFormat.setInteger(MediaFormat.KEY_OPERATING_RATE, MAX_OPERATING_RATE)
+      // No speed hints on the decoder: MediaTek's H.264 decoder fails outright with them on some files.
+      val videoMime = videoFormat.getString(MediaFormat.KEY_MIME)!!
+      val decoderName = if (softwareOnly) softwareDecoderFor(videoMime) else null
+      videoDecoder = if (decoderName != null) MediaCodec.createByCodecName(decoderName) else MediaCodec.createDecoderByType(videoMime)
       videoDecoder.configure(videoFormat, encoderSurface, null, 0)
       videoDecoder.start()
       extractor.selectTrack(videoTrack)
@@ -307,6 +342,7 @@ internal class TranscodeSession(
         val keyframe = info.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME != 0
         val time = (info.presentationTimeUs - startUs).coerceAtLeast(0L)
         if (video) {
+          producedOutput = true
           pendingVideo += Fmp4Writer.Sample(data, time, frameDurationUs, keyframe)
           videoFragmentUs += frameDurationUs
         } else {
@@ -398,6 +434,17 @@ internal class TranscodeSession(
         extractor.setDataSource(uri.path ?: media.uri)
       }
     }
+
+    /** A decoder that runs on the processor rather than the phone's video hardware, or null when there is none. */
+    private fun softwareDecoderFor(mime: String): String? =
+      try {
+        MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.firstOrNull { info ->
+          !info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) } && !info.isHardwareAccelerated
+        }?.name
+      } catch (e: RuntimeException) {
+        Log.w(TAG, "Could not list decoders", e)
+        null
+      }
 
     fun trackIndex(extractor: MediaExtractor, prefix: String): Int {
       for (index in 0 until extractor.trackCount) {

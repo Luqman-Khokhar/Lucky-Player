@@ -3,16 +3,20 @@ package expo.modules.vlcplayer.cast
 import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
+import android.net.Uri
 import android.media.projection.MediaProjection
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import expo.modules.vlcplayer.VlcEngine
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.IOException
 import java.security.SecureRandom
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -66,6 +70,8 @@ object CastSession {
     var error: String? = null,
     /** Where the converted stream starts; the laptop's own clock runs from zero. */
     var streamStartMs: Long = 0L,
+    /** Whether the laptop can actually seek in what it was sent; browsers cannot in some containers. */
+    var seekable: Boolean = true,
     var transcode: TranscodeSession? = null,
     var screen: ScreenCastSession? = null
   ) {
@@ -81,6 +87,12 @@ object CastSession {
   private val lock = Any()
   private val mainHandler = Handler(Looper.getMainLooper())
   private val random = SecureRandom()
+
+  // Writing to a socket is forbidden on the main thread, and the app's buttons and the notification both call in
+  // from there. One thread keeps every message to a laptop in order, whoever asked for it.
+  private val sender: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+    Thread(runnable, "cast-send").apply { isDaemon = true }
+  }
 
   // Guarded by lock.
   private var appContext: Context? = null
@@ -127,10 +139,7 @@ object CastSession {
       receivers.values.toList().also { receivers.clear() }
     }
     val bye = message("bye", "reason" to "stopped")
-    closing.forEach {
-      it.socket.sendText(bye)
-      it.socket.close()
-    }
+    closing.forEach { closeReceiver(it, bye) }
     Log.i(TAG, "Casting stopped")
     CastService.stop(context.applicationContext)
     emit()
@@ -143,7 +152,7 @@ object CastSession {
       (pairing ?: CastPairing(context).also { pairing = it }).forgetAll()
       receivers.values.toList().also { receivers.clear() }
     }
-    closing.forEach { it.socket.close() }
+    closing.forEach { closeReceiver(it, null) }
     emit()
     emitPlayback()
   }
@@ -177,7 +186,7 @@ object CastSession {
    * the main thread.
    */
   @Throws(CastException::class)
-  fun castMedia(context: Context, receiverId: String, uri: String, title: String, startMs: Long) {
+  fun castMedia(context: Context, receiverId: String, uri: String, title: String, startMs: Long, knownDurationMs: Long) {
     val app = context.applicationContext
     val receiver = synchronized(lock) { receivers[receiverId] }
       ?: throw CastException("ERR_NO_RECEIVER", "That laptop is no longer connected. Open the Cast screen to connect it again.")
@@ -195,8 +204,11 @@ object CastSession {
       throw CastException("ERR_UNSUPPORTED", "$browser can't play ${plan.blocker}, and this phone can't convert it either.")
     }
     val convert = plan.mode == CodecPlanner.Mode.CONVERT
-    // A converted stream has no length of its own, so the phone measures the file up front.
-    val durationMs = if (convert) checkConvertible(app, media) else 0L
+    // The phone measures every file: browsers often cannot work out an MKV's length, which leaves the remote
+    // without a seek bar.
+    // The app often knows the length already, from playing the video before; the phone only measures when it does not.
+    val measuredMs = if (convert) checkConvertible(app, media) else mediaDurationMs(app, media)
+    val durationMs = if (measuredMs > 0) measuredMs else knownDurationMs.coerceAtLeast(0L)
 
     val next = Active(
       receiverId, receiver.name, media.title, media.uri, media, newToken(), tracks?.video, tracks?.audio, convert,
@@ -209,8 +221,12 @@ object CastSession {
       replaced?.takeIf { it.receiverId != receiverId }?.let { receivers[it.receiverId] }
     }
     stopPendingTranscodes()
-    previous?.socket?.sendText(message("stop"))
-    Log.i(TAG, "Casting ${media.mimeType} (${media.size} bytes) ${if (convert) "converted" else "as it is"} to ${receiver.name}")
+    send(previous, message("stop"))
+    Log.i(
+      TAG,
+      "Casting ${media.mimeType} (${media.size} bytes, ${durationMs} ms) " +
+        "${if (convert) "converted" else "as it is"} to ${receiver.name}"
+    )
     if (convert) startTranscode(app, receiver, next) else sendLoad(receiver, next)
     emitPlayback()
   }
@@ -232,11 +248,43 @@ object CastSession {
         )
       }
       val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
-      return durationUs / 1000L
+      return if (durationUs > 0) durationUs / 1000L else mediaDurationMs(context, media)
     } catch (e: IOException) {
       throw CastException("ERR_OPEN", "Couldn't read this video for casting.")
     } finally {
       runCatching { extractor.release() }
+    }
+  }
+
+  /** The file's length, read from its metadata; 0 when even that does not say. */
+  private fun mediaDurationMs(context: Context, media: CastMedia): Long {
+    val retriever = MediaMetadataRetriever()
+    return try {
+      val uri = Uri.parse(media.uri)
+      if (uri.scheme.equals("content", ignoreCase = true)) {
+        val descriptor = VlcEngine.openContentDescriptor(context, uri) ?: return 0L
+        descriptor.use { retriever.setDataSource(it.fileDescriptor) }
+      } else {
+        retriever.setDataSource(uri.path ?: media.uri)
+      }
+      val reported = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+      if (reported > 0) reported else matroskaDurationMs(context, media)
+    } catch (e: RuntimeException) {
+      Log.w(TAG, "Could not read the length of ${media.uri}", e)
+      matroskaDurationMs(context, media)
+    } finally {
+      runCatching { retriever.release() }
+    }
+  }
+
+  /** MKV and WebM carry their length in the header, which Android's metadata reader often fails to report. */
+  private fun matroskaDurationMs(context: Context, media: CastMedia): Long {
+    if (media.mimeType != "video/x-matroska" && media.mimeType != "video/webm" && media.mimeType != "video/mkv") return 0L
+    return try {
+      media.open(context, 0L).use { MatroskaTracks.readDurationMs(it.channel) }
+    } catch (e: IOException) {
+      Log.w(TAG, "Could not read the header length of ${media.uri}", e)
+      0L
     }
   }
 
@@ -245,7 +293,8 @@ object CastSession {
     val session = TranscodeSession(context, media, item.positionMs * 1000L, object : TranscodeSession.Listener {
       override fun onInitSegment(mimeType: String, data: ByteArray) {
         val target = currentReceiver(item) ?: return
-        target.socket.sendText(
+        send(
+          target,
           message(
             "load",
             "kind" to "stream",
@@ -256,15 +305,16 @@ object CastSession {
             "durationMs" to synchronized(lock) { item.durationMs }
           )
         )
-        target.socket.sendBinary(data)
+        Log.i(TAG, "Stream starts at ${item.streamStartMs} ms (${data.size} bytes of header)")
+        sendBinary(target, data)
       }
 
       override fun onFragment(data: ByteArray) {
-        currentReceiver(item)?.socket?.sendBinary(data)
+        sendBinary(currentReceiver(item), data)
       }
 
       override fun onEnded() {
-        currentReceiver(item)?.socket?.sendText(message("stream_end"))
+        send(currentReceiver(item), message("stream_end"))
       }
 
       override fun onError(errorMessage: String) {
@@ -325,19 +375,20 @@ object CastSession {
     }
     previousTranscode?.stop()
     previousScreen?.stop()
-    previousReceiver?.socket?.sendText(message("stop"))
+    send(previousReceiver, message("stop"))
 
     val session = ScreenCastSession(app, projection, withAudio, object : TranscodeSession.Listener {
       override fun onInitSegment(mimeType: String, data: ByteArray) {
         val target = currentReceiver(next) ?: return
-        target.socket.sendText(
+        send(
+          target,
           message("load", "kind" to "screen", "token" to next.token, "mimeType" to mimeType, "title" to next.title)
         )
-        target.socket.sendBinary(data)
+        sendBinary(target, data)
       }
 
       override fun onFragment(data: ByteArray) {
-        currentReceiver(next)?.socket?.sendBinary(data)
+        sendBinary(currentReceiver(next), data)
       }
 
       // Android stops the capture when the phone locks, and the Stop button in its own notice does the same.
@@ -349,7 +400,7 @@ object CastSession {
           true
         }
         if (cleared) {
-          receiverToTell?.socket?.sendText(message("stop"))
+          send(receiverToTell, message("stop"))
           emitPlayback()
         }
       }
@@ -398,15 +449,24 @@ object CastSession {
       val playing = active ?: return
       Triple(playing, receivers[playing.receiverId], appContext)
     }
+    Log.i(TAG, "Control $action pos=$positionMs mirroring=${current.mirroring} laptop=${receiver?.name ?: "gone"}")
     when (action) {
-      "play", "pause" -> receiver?.socket?.sendText(message(action))
+      "mute", "unmute" -> current.screen?.setMuted(action == "mute")
+      "play", "pause" -> {
+        // Pausing a mirror also stops capturing, so the phone is not working for a picture nobody sees.
+        current.screen?.setPaused(action == "pause")
+        send(receiver, message(action))
+      }
       "seek" -> {
         val target = positionMs.coerceAtLeast(0L)
         if (current.convert) {
           if (context != null && receiver != null) restartTranscode(context, receiver, current, target)
+        } else if (!current.seekable) {
+          // The browser will not seek in this file, so the phone converts from the new position instead.
+          if (context != null && receiver != null) convertForSeek(context, receiver, current, target)
         } else {
           synchronized(lock) { current.positionMs = target }
-          receiver?.socket?.sendText(message("seek", "ms" to target))
+          send(receiver, message("seek", "ms" to target))
         }
       }
       "stop" -> {
@@ -423,21 +483,48 @@ object CastSession {
         }
         session?.stop()
         mirror?.stop()
-        receiver?.socket?.sendText(message("stop"))
+        send(receiver, message("stop"))
         emitPlayback()
       }
     }
   }
 
+  /** Switches a file the browser cannot seek in over to a converted stream, starting at [positionMs]. */
+  private fun convertForSeek(context: Context, receiver: Receiver, item: Active, positionMs: Long) {
+    val media = item.media ?: return
+    val durationMs = try {
+      checkConvertible(context, media)
+    } catch (e: CastException) {
+      synchronized(lock) {
+        item.status = "error"
+        item.error = e.message
+      }
+      emitPlayback()
+      return
+    }
+    Log.i(TAG, "${receiver.name} cannot seek in ${media.mimeType}; converting from $positionMs ms")
+    synchronized(lock) {
+      item.convert = true
+      item.durationMs = durationMs
+      item.positionMs = positionMs
+      item.status = "loading"
+      item.error = null
+    }
+    send(receiver, message("stop"))
+    startTranscode(context, receiver, item)
+    emitPlayback()
+  }
+
   /** A converted stream has only what the laptop already received, so seeking converts again from the new position. */
   private fun restartTranscode(context: Context, receiver: Receiver, item: Active, positionMs: Long) {
+    Log.i(TAG, "Seek to $positionMs ms: converting again for ${receiver.name}")
     val previous = synchronized(lock) {
       item.positionMs = positionMs
       item.status = "loading"
       item.transcode.also { item.transcode = null }
     }
     previous?.stop()
-    receiver.socket.sendText(message("stop"))
+    send(receiver, message("stop"))
     startTranscode(context, receiver, item)
     emitPlayback()
   }
@@ -452,6 +539,7 @@ object CastSession {
       "uri" to current.uri,
       "title" to current.title,
       "status" to if (connected) current.status else "disconnected",
+      "muted" to (current.screen?.muted ?: false),
       "positionMs" to current.positionMs.toDouble(),
       "durationMs" to current.durationMs.toDouble(),
       "error" to current.error
@@ -459,6 +547,26 @@ object CastSession {
   }
 
   internal fun mediaFor(token: String): CastMedia? = synchronized(lock) { active?.takeIf { it.token == token }?.media }
+
+  private fun send(receiver: Receiver?, text: String) {
+    val target = receiver ?: return
+    runCatching { sender.execute { target.socket.sendText(text) } }
+  }
+
+  private fun sendBinary(receiver: Receiver?, data: ByteArray) {
+    val target = receiver ?: return
+    runCatching { sender.execute { target.socket.sendBinary(data) } }
+  }
+
+  /** Says goodbye and closes, in that order and off the caller's thread. */
+  private fun closeReceiver(receiver: Receiver, farewell: String?) {
+    runCatching {
+      sender.execute {
+        if (farewell != null) receiver.socket.sendText(farewell)
+        receiver.socket.close()
+      }
+    }
+  }
 
   /** Stops a converter or screen capture belonging to [item] and forgets it. */
   private fun stopSources(item: Active?) {
@@ -475,7 +583,8 @@ object CastSession {
   private fun sendLoad(receiver: Receiver, item: Active) {
     val media = item.media ?: return
     val positionMs = synchronized(lock) { item.positionMs }
-    receiver.socket.sendText(
+    send(
+      receiver,
       message(
         "load",
         "kind" to "direct",
@@ -483,7 +592,8 @@ object CastSession {
         "url" to "/media/${item.token}",
         "mimeType" to media.mimeType,
         "title" to media.title,
-        "startMs" to positionMs
+        "startMs" to positionMs,
+        "durationMs" to synchronized(lock) { item.durationMs }
       )
     )
   }
@@ -504,7 +614,12 @@ object CastSession {
       // A converted stream runs from zero on the laptop, so its reports are relative to where conversion started.
       val reported = report.optLong("positionMs", 0L).coerceAtLeast(0L)
       current.positionMs = if (current.convert) current.streamStartMs + reported else reported
-      if (!current.convert) current.durationMs = report.optLong("durationMs", current.durationMs).coerceAtLeast(0L)
+      if (!current.convert) {
+        current.seekable = report.optBoolean("seekable", true)
+        // The phone's own measurement wins when the browser does not know the length.
+        val reportedDuration = report.optLong("durationMs", 0L)
+        if (reportedDuration > 0) current.durationMs = reportedDuration
+      }
       current.error = report.optString("error").takeIf { status == "error" && it.isNotEmpty() }?.take(200)
       transcode = current.transcode
     }
@@ -576,7 +691,7 @@ object CastSession {
       item.status = "loading"
       item.error = null
     }
-    receiver.socket.sendText(message("stop"))
+    send(receiver, message("stop"))
     startTranscode(context, receiver, item)
     emitPlayback()
     return true
@@ -584,7 +699,10 @@ object CastSession {
 
   private fun onReceiverControl(receiver: Receiver, control: JSONObject) {
     val playing = synchronized(lock) { active?.takeIf { it.receiverId == receiver.id && it.token == control.optString("token") } }
-    if (playing == null) return
+    if (playing == null) {
+      Log.i(TAG, "Ignoring ${control.optString("action")} from ${receiver.name}: it is not what this phone is casting")
+      return
+    }
     castControl(control.optString("action"), control.optLong("ms", 0L))
   }
 
