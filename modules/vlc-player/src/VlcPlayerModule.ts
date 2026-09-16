@@ -1,6 +1,9 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
 import type {
+  CastControlAction,
+  CastPlayback,
+  CastState,
   DeviceProfile,
   FolderVideo,
   MediaInfo,
@@ -16,6 +19,10 @@ import type {
 type VlcPlayerModuleEvents = {
   /** A notification button changed the sound settings; `settings` is the saved settings as JSON. */
   onSoundSettingsChanged: (event: { settings: string }) => void;
+  /** Casting started or stopped, a laptop connected or left, the address or code changed. */
+  onCastStateChanged: (event: { state: CastState }) => void;
+  /** A laptop reported playback, a video started or stopped, or the playing laptop disconnected. */
+  onCastPlaybackChanged: (event: { playback: CastPlayback | null }) => void;
 };
 
 declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
@@ -64,6 +71,30 @@ declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
   /** Media stream volume as a step index. */
   getMediaVolume(): Promise<MediaVolume>;
   setMediaVolume(index: number): Promise<void>;
+  /**
+   * Starts the laptop receiver server and the casting notification. Resolves the state with address and code.
+   * Rejects with ERR_NO_NETWORK without Wi-Fi or hotspot, ERR_CAST_SERVER when no port could be opened.
+   */
+  startCast(): Promise<CastState>;
+  /** Tells connected laptops casting stopped, closes the server and removes the notification. */
+  stopCast(): Promise<void>;
+  getCastState(): Promise<CastState>;
+  /** Every laptop must enter the code again; connected laptops are disconnected. */
+  forgetCastReceivers(): Promise<void>;
+  /**
+   * Plays a video in a connected laptop's browser from `startMs`, replacing what was casting. Rejects with
+   * ERR_NO_RECEIVER, ERR_OPEN, or ERR_UNSUPPORTED when the browser can't play the file as it is; messages are for users.
+   */
+  /** `durationMs` is what the app already knows, used when the phone cannot measure the file (0 when unknown). */
+  castMedia(receiverId: string, uri: string, title: string, startMs: number, durationMs: number): Promise<void>;
+  /** `positionMs` is used by seek only. */
+  castControl(action: CastControlAction, positionMs: number): Promise<void>;
+  getCastPlayback(): Promise<CastPlayback | null>;
+  /**
+   * Mirrors the phone screen to a laptop, after Android's screen-capture prompt. With `withAudio`, what the phone
+   * plays is sent too, which needs the microphone permission. Rejects with ERR_DENIED when the prompt is refused.
+   */
+  startScreenCast(receiverId: string, withAudio: boolean): Promise<void>;
 }
 
 export default requireNativeModule<VlcPlayerModule>('VlcPlayer');

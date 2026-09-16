@@ -1,0 +1,831 @@
+package expo.modules.vlcplayer.cast
+
+import android.content.Context
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
+import android.net.Uri
+import android.media.projection.MediaProjection
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
+import android.util.Log
+import expo.modules.vlcplayer.VlcEngine
+import org.json.JSONException
+import org.json.JSONObject
+import java.io.IOException
+import java.security.SecureRandom
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
+
+/**
+ * Casting state shared by the app, the service and the server: running server, pairing, connected laptops and the
+ * video one of them plays. Thread-safe; [listener] and [playbackListener] are called on the main thread.
+ */
+object CastSession {
+  private const val TAG = "CastSession"
+  private const val TICK_MS = 5_000L
+  private const val MAX_RECEIVERS = 4
+  private val PLAYBACK_STATUSES = setOf("loading", "blocked", "buffering", "playing", "paused", "ended", "error")
+  // MEDIA_ERR_DECODE and MEDIA_ERR_SRC_NOT_SUPPORTED from the laptop's video element.
+  private val DECODE_ERROR_CODES = setOf(3, 4)
+
+  class NoNetworkException : Exception("No Wi-Fi or hotspot network")
+
+  class CastException(val code: String, message: String) : Exception(message)
+
+  internal class Receiver(
+    val id: String,
+    val name: String,
+    val browser: String,
+    val os: String,
+    val capabilities: JSONObject,
+    val connectedAt: Long,
+    val socket: CastWebSocket
+  ) {
+    /** Codecs this browser said it could play but then failed on; they are converted from now on. */
+    val blockedCodecs: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet())
+  }
+
+  /**
+   * What a laptop is showing: a video file, or the mirrored phone screen ([media] null). Mutable fields are guarded
+   * by lock and come from the laptop's reports.
+   */
+  private class Active(
+    val receiverId: String,
+    val receiverName: String,
+    val title: String,
+    val uri: String,
+    val media: CastMedia?,
+    val token: String,
+    val videoMime: String?,
+    val audioMime: String?,
+    var convert: Boolean,
+    var status: String,
+    var positionMs: Long,
+    var durationMs: Long = 0L,
+    var error: String? = null,
+    /** Where the converted stream starts; the laptop's own clock runs from zero. */
+    var streamStartMs: Long = 0L,
+    /** Whether the laptop can actually seek in what it was sent; browsers cannot in some containers. */
+    var seekable: Boolean = true,
+    var transcode: TranscodeSession? = null,
+    var screen: ScreenCastSession? = null
+  ) {
+    val mirroring: Boolean get() = media == null
+  }
+
+  @Volatile
+  var listener: ((Map<String, Any?>) -> Unit)? = null
+
+  @Volatile
+  var playbackListener: ((Map<String, Any?>?) -> Unit)? = null
+
+  private val lock = Any()
+  private val mainHandler = Handler(Looper.getMainLooper())
+  private val random = SecureRandom()
+
+  // Writing to a socket is forbidden on the main thread, and the app's buttons and the notification both call in
+  // from there. One thread keeps every message to a laptop in order, whoever asked for it.
+  private val sender: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
+    Thread(runnable, "cast-send").apply { isDaemon = true }
+  }
+
+  // Guarded by lock.
+  private var appContext: Context? = null
+  private var server: CastHttpServer? = null
+  private var pairing: CastPairing? = null
+  private var address: CastNetwork.LocalAddress? = null
+  private var ticker: ScheduledExecutorService? = null
+  private val receivers = LinkedHashMap<String, Receiver>()
+  private var active: Active? = null
+  // Converters wait here to be stopped off the lock; stopping one joins its thread.
+  private val stopping = ArrayDeque<TranscodeSession>()
+
+  @Throws(IOException::class, NoNetworkException::class)
+  fun start(context: Context): Map<String, Any?> {
+    val app = context.applicationContext
+    synchronized(lock) {
+      if (server != null) return snapshotLocked()
+      val local = CastNetwork.localAddress(app) ?: throw NoNetworkException()
+      val http = CastHttpServer(app, { token -> mediaFor(token) }) { socket, request -> serveReceiver(socket, request) }
+      http.start()
+      appContext = app
+      server = http
+      address = local
+      pairing = (pairing ?: CastPairing(app)).also { it.renewCode() }
+      ticker = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "cast-ticker").apply { isDaemon = true }
+      }.also { it.scheduleWithFixedDelay({ tick() }, TICK_MS, TICK_MS, TimeUnit.MILLISECONDS) }
+    }
+    Log.i(TAG, "Casting started")
+    CastService.start(app)
+    emit()
+    return snapshot()
+  }
+
+  fun stop(context: Context) {
+    stopSources(synchronized(lock) { active })
+    val closing = synchronized(lock) {
+      val http = server ?: return
+      server = null
+      active = null
+      ticker?.shutdownNow()
+      ticker = null
+      http.stop()
+      receivers.values.toList().also { receivers.clear() }
+    }
+    val bye = message("bye", "reason" to "stopped")
+    closing.forEach { closeReceiver(it, bye) }
+    Log.i(TAG, "Casting stopped")
+    CastService.stop(context.applicationContext)
+    emit()
+    emitPlayback()
+  }
+
+  /** Every laptop has to enter the code again; connected ones are disconnected. */
+  fun forgetReceivers(context: Context) {
+    val closing = synchronized(lock) {
+      (pairing ?: CastPairing(context).also { pairing = it }).forgetAll()
+      receivers.values.toList().also { receivers.clear() }
+    }
+    closing.forEach { closeReceiver(it, null) }
+    emit()
+    emitPlayback()
+  }
+
+  fun snapshot(): Map<String, Any?> = synchronized(lock) { snapshotLocked() }
+
+  private fun snapshotLocked(): Map<String, Any?> {
+    val http = server
+    val local = address.takeIf { http != null }
+    return mapOf(
+      "running" to (http != null),
+      "address" to if (http != null && local != null) "http://${local.ip}:${http.port}" else null,
+      "network" to local?.kind?.id,
+      "code" to pairing?.code?.takeIf { http != null },
+      "receivers" to receivers.values.map {
+        mapOf(
+          "id" to it.id,
+          "name" to it.name,
+          "browser" to it.browser,
+          "os" to it.os,
+          "connectedAt" to it.connectedAt.toDouble()
+        )
+      }
+    )
+  }
+
+  // region Playback
+
+  /**
+   * Sends a video to a connected laptop, replacing what any laptop was playing. Blocking (probes the file); call off
+   * the main thread.
+   */
+  @Throws(CastException::class)
+  fun castMedia(context: Context, receiverId: String, uri: String, title: String, startMs: Long, knownDurationMs: Long) {
+    val app = context.applicationContext
+    val receiver = synchronized(lock) { receivers[receiverId] }
+      ?: throw CastException("ERR_NO_RECEIVER", "That laptop is no longer connected. Open the Cast screen to connect it again.")
+    val media = try {
+      CastMedia.describe(app, uri, title)
+    } catch (e: IOException) {
+      Log.w(TAG, "Cannot open $uri for casting", e)
+      throw CastException("ERR_OPEN", "Couldn't open this video for casting. Check that the file still exists.")
+    }
+    val tracks = CodecPlanner.readTracks(app, media)
+    val plan = CodecPlanner.plan(media, tracks, receiver.capabilities, receiver.blockedCodecs)
+    Log.i(TAG, "Plan ${media.mimeType} video=${tracks?.video} audio=${tracks?.audio} mode=${plan.mode} ${plan.blocker}")
+    if (plan.mode == CodecPlanner.Mode.REFUSE) {
+      val browser = receiver.browser.ifEmpty { "This browser" }
+      throw CastException("ERR_UNSUPPORTED", "$browser can't play ${plan.blocker}, and this phone can't convert it either.")
+    }
+    val convert = plan.mode == CodecPlanner.Mode.CONVERT
+    // The phone measures every file: browsers often cannot work out an MKV's length, which leaves the remote
+    // without a seek bar.
+    // The app often knows the length already, from playing the video before; the phone only measures when it does not.
+    val measuredMs = if (convert) checkConvertible(app, media) else mediaDurationMs(app, media)
+    val durationMs = if (measuredMs > 0) measuredMs else knownDurationMs.coerceAtLeast(0L)
+
+    val next = Active(
+      receiverId, receiver.name, media.title, media.uri, media, newToken(), tracks?.video, tracks?.audio, convert,
+      "loading", startMs.coerceAtLeast(0L), durationMs
+    )
+    val previous = synchronized(lock) {
+      val replaced = active
+      active = next
+      replaced?.transcode?.let { stopping.add(it) }
+      replaced?.takeIf { it.receiverId != receiverId }?.let { receivers[it.receiverId] }
+    }
+    stopPendingTranscodes()
+    send(previous, message("stop"))
+    Log.i(
+      TAG,
+      "Casting ${media.mimeType} (${media.size} bytes, ${durationMs} ms) " +
+        "${if (convert) "converted" else "as it is"} to ${receiver.name}"
+    )
+    if (convert) startTranscode(app, receiver, next) else sendLoad(receiver, next)
+    emitPlayback()
+  }
+
+  /** The video's length in milliseconds. Refuses what the converter cannot handle: scaling down needs an OpenGL pass it does not have yet. */
+  @Throws(CastException::class)
+  private fun checkConvertible(context: Context, media: CastMedia): Long {
+    val extractor = MediaExtractor()
+    try {
+      TranscodeSession.openSource(extractor, context, media)
+      val index = TranscodeSession.trackIndex(extractor, "video/")
+      if (index < 0) throw CastException("ERR_UNSUPPORTED", "This file has no video track to cast.")
+      val format = extractor.getTrackFormat(index)
+      val pixels = format.getInteger(MediaFormat.KEY_WIDTH) * format.getInteger(MediaFormat.KEY_HEIGHT)
+      if (pixels > TranscodeSession.MAX_PIXELS) {
+        throw CastException(
+          "ERR_TOO_LARGE",
+          "This video is larger than Full HD, which this phone can't convert for the laptop yet."
+        )
+      }
+      val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
+      return if (durationUs > 0) durationUs / 1000L else mediaDurationMs(context, media)
+    } catch (e: IOException) {
+      throw CastException("ERR_OPEN", "Couldn't read this video for casting.")
+    } finally {
+      runCatching { extractor.release() }
+    }
+  }
+
+  /** The file's length, read from its metadata; 0 when even that does not say. */
+  private fun mediaDurationMs(context: Context, media: CastMedia): Long {
+    val retriever = MediaMetadataRetriever()
+    return try {
+      val uri = Uri.parse(media.uri)
+      if (uri.scheme.equals("content", ignoreCase = true)) {
+        val descriptor = VlcEngine.openContentDescriptor(context, uri) ?: return 0L
+        descriptor.use { retriever.setDataSource(it.fileDescriptor) }
+      } else {
+        retriever.setDataSource(uri.path ?: media.uri)
+      }
+      val reported = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+      if (reported > 0) reported else matroskaDurationMs(context, media)
+    } catch (e: RuntimeException) {
+      Log.w(TAG, "Could not read the length of ${media.uri}", e)
+      matroskaDurationMs(context, media)
+    } finally {
+      runCatching { retriever.release() }
+    }
+  }
+
+  /** MKV and WebM carry their length in the header, which Android's metadata reader often fails to report. */
+  private fun matroskaDurationMs(context: Context, media: CastMedia): Long {
+    if (media.mimeType != "video/x-matroska" && media.mimeType != "video/webm" && media.mimeType != "video/mkv") return 0L
+    return try {
+      media.open(context, 0L).use { MatroskaTracks.readDurationMs(it.channel) }
+    } catch (e: IOException) {
+      Log.w(TAG, "Could not read the header length of ${media.uri}", e)
+      0L
+    }
+  }
+
+  private fun startTranscode(context: Context, receiver: Receiver, item: Active) {
+    val media = item.media ?: return
+    val session = TranscodeSession(context, media, item.positionMs * 1000L, object : TranscodeSession.Listener {
+      override fun onInitSegment(mimeType: String, data: ByteArray) {
+        val target = currentReceiver(item) ?: return
+        send(
+          target,
+          message(
+            "load",
+            "kind" to "stream",
+            "token" to item.token,
+            "mimeType" to mimeType,
+            "title" to media.title,
+            "startMs" to item.streamStartMs,
+            "durationMs" to synchronized(lock) { item.durationMs }
+          )
+        )
+        Log.i(TAG, "Stream starts at ${item.streamStartMs} ms (${data.size} bytes of header)")
+        sendBinary(target, data)
+      }
+
+      override fun onFragment(data: ByteArray) {
+        sendBinary(currentReceiver(item), data)
+      }
+
+      override fun onEnded() {
+        send(currentReceiver(item), message("stream_end"))
+      }
+
+      override fun onError(errorMessage: String) {
+        val changed = synchronized(lock) {
+          if (active !== item) return@synchronized false
+          item.status = "error"
+          item.error = errorMessage
+          true
+        }
+        if (changed) emitPlayback()
+      }
+    })
+    synchronized(lock) {
+      item.streamStartMs = item.positionMs
+      item.transcode = session
+    }
+    session.start()
+  }
+
+  /** Null once this video is no longer the one being cast, or while its laptop is away. */
+  private fun currentReceiver(item: Active): Receiver? = synchronized(lock) {
+    if (active !== item) null else receivers[item.receiverId]
+  }
+
+  private fun stopPendingTranscodes() {
+    while (true) {
+      val session = synchronized(lock) { stopping.removeFirstOrNull() } ?: return
+      session.stop()
+    }
+  }
+
+  /**
+   * Mirrors the phone screen to a laptop, replacing whatever it was showing. [projection] comes from the system's
+   * screen-capture prompt and is used once.
+   */
+  @Throws(CastException::class)
+  fun startScreenCast(context: Context, receiverId: String, projection: MediaProjection, withAudio: Boolean) {
+    val app = context.applicationContext
+    val receiver = synchronized(lock) { receivers[receiverId] }
+      ?: throw CastException("ERR_NO_RECEIVER", "That laptop is no longer connected. Open the Cast screen to connect it again.")
+    val supportsStream = receiver.capabilities.optJSONObject("stream")?.optBoolean("fmp4-h264-aac") == true
+    if (!supportsStream) {
+      throw CastException("ERR_UNSUPPORTED", "${receiver.browser.ifEmpty { "This browser" }} can't show the phone screen.")
+    }
+
+    val next = Active(
+      receiverId, receiver.name, "Phone screen", "", null, newToken(), null, null, convert = true, status = "loading",
+      positionMs = 0L
+    )
+    var previousTranscode: TranscodeSession? = null
+    var previousScreen: ScreenCastSession? = null
+    val previousReceiver = synchronized(lock) {
+      val replaced = active
+      active = next
+      previousTranscode = replaced?.transcode
+      previousScreen = replaced?.screen
+      replaced?.takeIf { it.receiverId != receiverId }?.let { receivers[it.receiverId] }
+    }
+    previousTranscode?.stop()
+    previousScreen?.stop()
+    send(previousReceiver, message("stop"))
+
+    val session = ScreenCastSession(app, projection, withAudio, object : TranscodeSession.Listener {
+      override fun onInitSegment(mimeType: String, data: ByteArray) {
+        val target = currentReceiver(next) ?: return
+        send(
+          target,
+          message("load", "kind" to "screen", "token" to next.token, "mimeType" to mimeType, "title" to next.title)
+        )
+        sendBinary(target, data)
+      }
+
+      override fun onFragment(data: ByteArray) {
+        sendBinary(currentReceiver(next), data)
+      }
+
+      // Android stops the capture when the phone locks, and the Stop button in its own notice does the same.
+      override fun onEnded() {
+        val receiverToTell = currentReceiver(next)
+        val cleared = synchronized(lock) {
+          if (active !== next) return@synchronized false
+          active = null
+          true
+        }
+        if (cleared) {
+          send(receiverToTell, message("stop"))
+          emitPlayback()
+        }
+      }
+
+      override fun onError(errorMessage: String) {
+        val changed = synchronized(lock) {
+          if (active !== next) return@synchronized false
+          next.status = "error"
+          next.error = errorMessage
+          true
+        }
+        if (changed) emitPlayback()
+      }
+    })
+    synchronized(lock) { next.screen = session }
+    try {
+      session.start()
+    } catch (e: IllegalStateException) {
+      Log.w(TAG, "Screen capture failed to start", e)
+      synchronized(lock) { if (active === next) active = null }
+      session.stop()
+      emitPlayback()
+      throw CastException("ERR_SCREEN", "The phone couldn't start screen sharing.")
+    }
+    Log.i(TAG, "Mirroring the screen to ${receiver.name}")
+    emitPlayback()
+  }
+
+  /** Shows on the phone's remote why screen sharing could not start. */
+  fun reportScreenCastFailure(receiverId: String, message: String) {
+    val receiver = synchronized(lock) { receivers[receiverId] } ?: return
+    val failed = Active(
+      receiverId, receiver.name, "Phone screen", "", null, newToken(), null, null, convert = true, status = "error",
+      positionMs = 0L, error = message
+    )
+    synchronized(lock) {
+      if (active != null && active?.mirroring != true) return
+      active = failed
+    }
+    emitPlayback()
+  }
+
+  /** play, pause, seek (to [positionMs]) or stop for the video being cast. */
+  fun castControl(action: String, positionMs: Long) {
+    val (current, receiver, context) = synchronized(lock) {
+      val playing = active ?: return
+      Triple(playing, receivers[playing.receiverId], appContext)
+    }
+    Log.i(TAG, "Control $action pos=$positionMs mirroring=${current.mirroring} laptop=${receiver?.name ?: "gone"}")
+    when (action) {
+      "mute", "unmute" -> current.screen?.setMuted(action == "mute")
+      "play", "pause" -> {
+        // Pausing a mirror also stops capturing, so the phone is not working for a picture nobody sees.
+        current.screen?.setPaused(action == "pause")
+        send(receiver, message(action))
+      }
+      "seek" -> {
+        val target = positionMs.coerceAtLeast(0L)
+        if (current.convert) {
+          if (context != null && receiver != null) restartTranscode(context, receiver, current, target)
+        } else if (!current.seekable) {
+          // The browser will not seek in this file, so the phone converts from the new position instead.
+          if (context != null && receiver != null) convertForSeek(context, receiver, current, target)
+        } else {
+          synchronized(lock) { current.positionMs = target }
+          send(receiver, message("seek", "ms" to target))
+        }
+      }
+      "stop" -> {
+        var session: TranscodeSession? = null
+        var mirror: ScreenCastSession? = null
+        synchronized(lock) {
+          if (active === current) {
+            session = current.transcode
+            mirror = current.screen
+            current.transcode = null
+            current.screen = null
+            active = null
+          }
+        }
+        session?.stop()
+        mirror?.stop()
+        send(receiver, message("stop"))
+        emitPlayback()
+      }
+    }
+  }
+
+  /** Switches a file the browser cannot seek in over to a converted stream, starting at [positionMs]. */
+  private fun convertForSeek(context: Context, receiver: Receiver, item: Active, positionMs: Long) {
+    val media = item.media ?: return
+    val durationMs = try {
+      checkConvertible(context, media)
+    } catch (e: CastException) {
+      synchronized(lock) {
+        item.status = "error"
+        item.error = e.message
+      }
+      emitPlayback()
+      return
+    }
+    Log.i(TAG, "${receiver.name} cannot seek in ${media.mimeType}; converting from $positionMs ms")
+    synchronized(lock) {
+      item.convert = true
+      item.durationMs = durationMs
+      item.positionMs = positionMs
+      item.status = "loading"
+      item.error = null
+    }
+    send(receiver, message("stop"))
+    startTranscode(context, receiver, item)
+    emitPlayback()
+  }
+
+  /** A converted stream has only what the laptop already received, so seeking converts again from the new position. */
+  private fun restartTranscode(context: Context, receiver: Receiver, item: Active, positionMs: Long) {
+    Log.i(TAG, "Seek to $positionMs ms: converting again for ${receiver.name}")
+    val previous = synchronized(lock) {
+      item.positionMs = positionMs
+      item.status = "loading"
+      item.transcode.also { item.transcode = null }
+    }
+    previous?.stop()
+    send(receiver, message("stop"))
+    startTranscode(context, receiver, item)
+    emitPlayback()
+  }
+
+  fun playbackSnapshot(): Map<String, Any?>? = synchronized(lock) {
+    val current = active ?: return@synchronized null
+    val connected = receivers.containsKey(current.receiverId)
+    mapOf(
+      "receiverId" to current.receiverId,
+      "receiverName" to current.receiverName,
+      "kind" to if (current.mirroring) "screen" else "video",
+      "uri" to current.uri,
+      "title" to current.title,
+      "status" to if (connected) current.status else "disconnected",
+      "muted" to (current.screen?.muted ?: false),
+      "positionMs" to current.positionMs.toDouble(),
+      "durationMs" to current.durationMs.toDouble(),
+      "error" to current.error
+    )
+  }
+
+  internal fun mediaFor(token: String): CastMedia? = synchronized(lock) { active?.takeIf { it.token == token }?.media }
+
+  private fun send(receiver: Receiver?, text: String) {
+    val target = receiver ?: return
+    runCatching { sender.execute { target.socket.sendText(text) } }
+  }
+
+  private fun sendBinary(receiver: Receiver?, data: ByteArray) {
+    val target = receiver ?: return
+    runCatching { sender.execute { target.socket.sendBinary(data) } }
+  }
+
+  /** Says goodbye and closes, in that order and off the caller's thread. */
+  private fun closeReceiver(receiver: Receiver, farewell: String?) {
+    runCatching {
+      sender.execute {
+        if (farewell != null) receiver.socket.sendText(farewell)
+        receiver.socket.close()
+      }
+    }
+  }
+
+  /** Stops a converter or screen capture belonging to [item] and forgets it. */
+  private fun stopSources(item: Active?) {
+    val (transcode, screen) = synchronized(lock) {
+      val sources = item?.transcode to item?.screen
+      item?.transcode = null
+      item?.screen = null
+      sources
+    }
+    transcode?.stop()
+    screen?.stop()
+  }
+
+  private fun sendLoad(receiver: Receiver, item: Active) {
+    val media = item.media ?: return
+    val positionMs = synchronized(lock) { item.positionMs }
+    send(
+      receiver,
+      message(
+        "load",
+        "kind" to "direct",
+        "token" to item.token,
+        "url" to "/media/${item.token}",
+        "mimeType" to media.mimeType,
+        "title" to media.title,
+        "startMs" to positionMs,
+        "durationMs" to synchronized(lock) { item.durationMs }
+      )
+    )
+  }
+
+  private fun onReceiverState(receiver: Receiver, report: JSONObject) {
+    val status = report.optString("status")
+    if (status !in PLAYBACK_STATUSES) return
+    // canPlayType was too optimistic: this laptop cannot really decode the file, so convert it instead.
+    if (status == "error" && report.optInt("errorCode") in DECODE_ERROR_CODES) {
+      val retried = retryAsConvert(receiver, report.optString("token"))
+      if (retried) return
+    }
+    var transcode: TranscodeSession? = null
+    synchronized(lock) {
+      val current = active ?: return
+      if (current.receiverId != receiver.id || report.optString("token") != current.token) return
+      current.status = status
+      // A converted stream runs from zero on the laptop, so its reports are relative to where conversion started.
+      val reported = report.optLong("positionMs", 0L).coerceAtLeast(0L)
+      current.positionMs = if (current.convert) current.streamStartMs + reported else reported
+      if (!current.convert) {
+        current.seekable = report.optBoolean("seekable", true)
+        // The phone's own measurement wins when the browser does not know the length.
+        val reportedDuration = report.optLong("durationMs", 0L)
+        if (reportedDuration > 0) current.durationMs = reportedDuration
+      }
+      current.error = report.optString("error").takeIf { status == "error" && it.isNotEmpty() }?.take(200)
+      transcode = current.transcode
+    }
+    transcode?.setBufferedAhead(report.optLong("bufferedAheadMs", 0L).coerceAtLeast(0L))
+    emitPlayback()
+  }
+
+  // endregion
+
+  // region Receiver connection (one server thread per laptop, blocking)
+
+  private fun serveReceiver(socket: CastWebSocket, request: CastHttpServer.Request) {
+    var hello: JSONObject? = null
+    var receiver: Receiver? = null
+    try {
+      while (true) {
+        val text = socket.readText() ?: break
+        val incoming = try {
+          JSONObject(text)
+        } catch (_: JSONException) {
+          continue
+        }
+        when (incoming.optString("type")) {
+          "hello" -> if (receiver == null) {
+            hello = incoming
+            receiver = onHello(socket, incoming)
+          }
+          "pair" -> if (receiver == null) {
+            receiver = hello?.let { onPair(socket, request, it, incoming.optString("code").trim()) }
+          }
+          "state" -> receiver?.let { onReceiverState(it, incoming) }
+          // The laptop page's own controls; a converted stream seeks through the phone.
+          "control" -> receiver?.let { onReceiverControl(it, incoming) }
+          "heartbeat" -> Unit
+        }
+      }
+    } catch (e: IOException) {
+      Log.i(TAG, "Laptop connection ended: ${e.message}")
+    } finally {
+      socket.close()
+      receiver?.let { remove(it) }
+    }
+  }
+
+  /** False when there is nothing to retry: another video, already converting, or the phone cannot convert this one. */
+  private fun retryAsConvert(receiver: Receiver, token: String): Boolean {
+    val (item, context) = synchronized(lock) {
+      val current = active ?: return false
+      if (current.receiverId != receiver.id || current.token != token || current.convert) return false
+      current to appContext
+    }
+    if (context == null) return false
+    val media = item.media ?: return false
+    item.videoMime?.let { receiver.blockedCodecs.add(it) }
+    val durationMs = try {
+      checkConvertible(context, media)
+    } catch (e: CastException) {
+      synchronized(lock) {
+        item.status = "error"
+        item.error = e.message
+      }
+      emitPlayback()
+      return true
+    }
+    Log.i(TAG, "${receiver.name} could not decode ${item.videoMime}; converting instead")
+    synchronized(lock) {
+      item.convert = true
+      item.durationMs = durationMs
+      item.status = "loading"
+      item.error = null
+    }
+    send(receiver, message("stop"))
+    startTranscode(context, receiver, item)
+    emitPlayback()
+    return true
+  }
+
+  private fun onReceiverControl(receiver: Receiver, control: JSONObject) {
+    val playing = synchronized(lock) { active?.takeIf { it.receiverId == receiver.id && it.token == control.optString("token") } }
+    if (playing == null) {
+      Log.i(TAG, "Ignoring ${control.optString("action")} from ${receiver.name}: it is not what this phone is casting")
+      return
+    }
+    castControl(control.optString("action"), control.optLong("ms", 0L))
+  }
+
+  private fun onHello(socket: CastWebSocket, hello: JSONObject): Receiver? {
+    val current = synchronized(lock) { pairing } ?: return null
+    val token: String? = hello.optString("token", null)
+    if (token != null && current.isPaired(token)) return accept(socket, hello, current.receiverId(token))
+    socket.sendText(message("need_code"))
+    return null
+  }
+
+  private fun onPair(socket: CastWebSocket, request: CastHttpServer.Request, hello: JSONObject, code: String): Receiver? {
+    val current = synchronized(lock) { pairing } ?: return null
+    return when (val result = current.pair(code, request.remoteAddress, receiverName(hello))) {
+      is CastPairing.Result.Paired -> {
+        socket.sendText(message("paired", "token" to result.token))
+        accept(socket, hello, current.receiverId(result.token))
+      }
+      is CastPairing.Result.Refused -> {
+        socket.sendText(message("pair_failed", "retryAfterMs" to result.retryAfterMs))
+        // Too many wrong codes renews the code; the app has to show the new one.
+        emit()
+        null
+      }
+    }
+  }
+
+  private fun accept(socket: CastWebSocket, hello: JSONObject, id: String): Receiver? {
+    val receiver = Receiver(
+      id = id,
+      name = receiverName(hello),
+      browser = clean(hello.optString("browser")),
+      os = clean(hello.optString("os")),
+      capabilities = hello.optJSONObject("capabilities") ?: JSONObject(),
+      connectedAt = System.currentTimeMillis(),
+      socket = socket
+    )
+    var replaced: Receiver? = null
+    var resume: Active? = null
+    val context = synchronized(lock) {
+      if (server == null) return null
+      replaced = receivers[id]
+      if (replaced == null && receivers.size >= MAX_RECEIVERS) {
+        socket.sendText(message("busy", "max" to MAX_RECEIVERS))
+        return null
+      }
+      receivers[id] = receiver
+      resume = active?.takeIf { it.receiverId == id }
+      appContext
+    }
+    // The same laptop reconnected before its old connection timed out.
+    replaced?.socket?.close()
+    socket.sendText(message("welcome", "receiverId" to id, "phoneName" to phoneName(context)))
+    // Reconnected mid-video: a direct stream continues where it was, a converted one starts again from there.
+    resume?.let { item ->
+      if (item.convert) context?.let { restartTranscode(it, receiver, item, item.positionMs) } else sendLoad(receiver, item)
+    }
+    Log.i(TAG, "Laptop connected: ${receiver.name}")
+    emit()
+    if (resume != null) emitPlayback()
+    return receiver
+  }
+
+  private fun remove(receiver: Receiver) {
+    val (removed, wasPlaying) = synchronized(lock) {
+      receivers.remove(receiver.id, receiver) to (active?.receiverId == receiver.id)
+    }
+    // Nothing to send the fragments to; converting or capturing on would only heat the phone.
+    if (removed && wasPlaying) stopSources(synchronized(lock) { active })
+    if (!removed) return
+    Log.i(TAG, "Laptop disconnected: ${receiver.name}")
+    emit()
+    if (wasPlaying) emitPlayback()
+  }
+
+  // endregion
+
+  private fun tick() {
+    val (targets, context) = synchronized(lock) { receivers.values.toList() to appContext }
+    val beat = message("heartbeat")
+    targets.forEach { if (!it.socket.sendText(beat)) remove(it) }
+    context ?: return
+    // The phone can move to another Wi-Fi or turn its hotspot on or off while casting.
+    val latest = CastNetwork.localAddress(context)
+    val changed = synchronized(lock) {
+      if (server == null || latest == address) return@synchronized false
+      address = latest
+      true
+    }
+    if (changed) emit()
+  }
+
+  private fun emit() {
+    val state = snapshot()
+    val context = synchronized(lock) { appContext }
+    if (context != null && state["running"] == true) CastNotification.update(context, state)
+    mainHandler.post { listener?.invoke(state) }
+  }
+
+  private fun emitPlayback() {
+    val playback = playbackSnapshot()
+    mainHandler.post { playbackListener?.invoke(playback) }
+  }
+
+  private fun newToken(): String = ByteArray(16).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it) }
+
+  private fun receiverName(hello: JSONObject): String =
+    listOf(clean(hello.optString("browser")), clean(hello.optString("os")))
+      .filter { it.isNotEmpty() && it != "Unknown" }
+      .joinToString(" · ")
+      .ifEmpty { "Laptop browser" }
+
+  private fun clean(value: String) = value.replace(Regex("[^\\p{L}\\p{N} ._-]"), "").trim().take(24)
+
+  private fun phoneName(context: Context?): String {
+    val name = if (context != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+      Settings.Global.getString(context.contentResolver, Settings.Global.DEVICE_NAME)
+    } else {
+      null
+    }
+    return name?.takeIf { it.isNotBlank() } ?: Build.MODEL
+  }
+
+  private fun message(type: String, vararg fields: Pair<String, Any?>): String =
+    JSONObject().put("type", type).apply { fields.forEach { (key, value) -> put(key, value) } }.toString()
+}

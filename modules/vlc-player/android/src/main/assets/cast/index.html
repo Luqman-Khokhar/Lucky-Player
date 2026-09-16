@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lucky Player</title>
+  <link rel="stylesheet" href="/receiver.css">
+  <script src="/receiver.js" defer></script>
+</head>
+<body>
+  <main id="app">
+    <section id="screen-connecting" class="screen" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>Connecting to Lucky Player…</h1>
+      <p class="muted" id="connecting-detail">Keep the Cast screen open in Lucky Player on your phone.</p>
+    </section>
+
+    <section id="screen-pair" class="screen" hidden>
+      <h1>Enter the code from your phone</h1>
+      <p class="muted">Lucky Player shows a 4-digit code on its Cast screen. You only enter it once on this laptop.</p>
+      <form id="pair-form" autocomplete="off" novalidate>
+        <label for="pair-code" class="sr-only">4-digit code</label>
+        <input id="pair-code" name="code" inputmode="numeric" maxlength="4" required aria-describedby="pair-error">
+        <button type="submit" id="pair-button">Connect</button>
+        <p id="pair-error" class="error" role="alert"></p>
+      </form>
+    </section>
+
+    <section id="screen-ready" class="screen" hidden>
+      <h1>Connected to <span class="phone-name">your phone</span></h1>
+      <p class="muted">Click Start receiving. Your browser needs one click before it can play video with sound.</p>
+      <button type="button" id="start-button">Start receiving</button>
+    </section>
+
+    <section id="screen-waiting" class="screen" hidden>
+      <h1>Ready to play</h1>
+      <p class="muted">Choose a video on <span class="phone-name">your phone</span> and tap the cast button. It plays here.</p>
+      <button type="button" id="fullscreen-button" class="secondary">Full screen</button>
+    </section>
+
+    <section id="screen-player" class="player" hidden>
+      <video id="video" playsinline preload="auto"></video>
+      <p id="player-status" class="player-status" role="status" hidden></p>
+      <button type="button" id="tap-to-play" class="tap-to-play" hidden>Click to play</button>
+      <div id="controls" class="controls">
+        <h1 id="video-title" class="video-title"></h1>
+        <div class="controls-row">
+          <button type="button" id="play-toggle" class="icon-button" aria-label="Play">
+            <svg id="icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="icon-pause" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+          </button>
+          <span id="time" class="time">0:00 / 0:00</span>
+          <label for="seek" class="sr-only">Playback position</label>
+          <input type="range" id="seek" min="0" max="0" step="1" value="0" disabled>
+          <button type="button" id="player-fullscreen" class="icon-button" aria-label="Full screen">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-ended" class="screen" hidden>
+      <h1 id="ended-title">Casting stopped</h1>
+      <p class="muted" id="ended-detail">Start casting again in Lucky Player on your phone, then click Reconnect.</p>
+      <button type="button" id="reconnect-button">Reconnect</button>
+    </section>
+  </main>
+  <div id="banner" class="banner" role="status" hidden></div>
+</body>
+</html>

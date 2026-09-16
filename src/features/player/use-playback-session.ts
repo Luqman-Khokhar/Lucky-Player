@@ -32,6 +32,13 @@ function warn(scope: string) {
   return (error: unknown) => console.warn(`[playback-session] ${scope}`, error);
 }
 
+/** Where a video resumes: its saved position, unless that is right at the start or near the end. */
+export function resumePosition(saved: { position: number } | null, duration: number): number {
+  return saved && saved.position >= RESUME_MIN_MS && (duration <= 0 || saved.position < duration - RESUME_END_GUARD_MS)
+    ? saved.position
+    : 0;
+}
+
 /** Resolves resume position + decoder mode before mount, and persists progress while playing. */
 export function usePlaybackSession(uri: string | undefined, { hwDecoding, resumePlayback }: Options) {
   const [prepared, setPrepared] = useState<PreparedSession | null>(null);
@@ -48,10 +55,7 @@ export function usePlaybackSession(uri: string | undefined, { hwDecoding, resume
       ]);
       if (cancelled) return;
       const duration = info?.duration || saved?.duration || 0;
-      const resumeAt =
-        resumePlayback && saved && saved.position >= RESUME_MIN_MS && (duration <= 0 || saved.position < duration - RESUME_END_GUARD_MS)
-          ? saved.position
-          : 0;
+      const resumeAt = resumePlayback ? resumePosition(saved, duration) : 0;
       const codec = info?.video[0]?.codec.trim().toLowerCase() ?? '';
       const knownBad = hwDecoding === 'auto' && codec !== '' && blockedCodecs.includes(codec);
       progressRef.current = { position: resumeAt, duration };

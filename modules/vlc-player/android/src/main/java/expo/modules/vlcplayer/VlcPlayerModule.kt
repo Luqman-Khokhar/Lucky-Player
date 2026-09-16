@@ -3,11 +3,17 @@ package expo.modules.vlcplayer
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.vlcplayer.cast.CastService
+import expo.modules.vlcplayer.cast.CastSession
+import java.io.IOException
 import java.util.concurrent.Executors
+
+private const val SCREEN_CAST_REQUEST_CODE = 7411
 
 class VlcPlayerModule : Module() {
   private val context: Context
@@ -16,23 +22,100 @@ class VlcPlayerModule : Module() {
   private var pendingPick: Promise? = null
   private var pendingFolderPick: Promise? = null
   private var pendingSubtitlePick: Promise? = null
+  private var pendingScreenCast: Promise? = null
+  private var pendingScreenReceiver: String? = null
+  private var pendingScreenAudio = false
 
   private val scanExecutor = Executors.newSingleThreadExecutor()
 
   // Two decoders at most: keeps MediaTek chips responsive while the list scrolls.
   private val thumbnailExecutor = Executors.newFixedThreadPool(2)
 
+  // Starting the server binds a socket; kept off the JS and main threads.
+  private val castExecutor = Executors.newSingleThreadExecutor()
+
   override fun definition() = ModuleDefinition {
     Name("VlcPlayer")
 
-    Events("onSoundSettingsChanged")
+    Events("onSoundSettingsChanged", "onCastStateChanged", "onCastPlaybackChanged")
 
     OnCreate {
       SoundEffectsController.listener = { settings -> sendEvent("onSoundSettingsChanged", mapOf("settings" to settings)) }
+      CastSession.listener = { state -> sendEvent("onCastStateChanged", mapOf("state" to state)) }
+      CastSession.playbackListener = { playback -> sendEvent("onCastPlaybackChanged", mapOf("playback" to playback)) }
     }
 
     OnDestroy {
       SoundEffectsController.listener = null
+      CastSession.listener = null
+      CastSession.playbackListener = null
+    }
+
+    AsyncFunction("castMedia") { receiverId: String, uri: String, title: String, startMs: Double, durationMs: Double, promise: Promise ->
+      val appContext = context
+      castExecutor.execute {
+        try {
+          CastSession.castMedia(appContext, receiverId, uri, title, startMs.toLong(), durationMs.toLong())
+          promise.resolve(null)
+        } catch (e: CastSession.CastException) {
+          promise.reject(e.code, e.message ?: "Could not cast this video", e)
+        }
+      }
+    }
+
+    AsyncFunction("castControl") { action: String, positionMs: Double ->
+      CastSession.castControl(action, positionMs.toLong())
+    }
+
+    AsyncFunction("getCastPlayback") {
+      CastSession.playbackSnapshot()
+    }
+
+    AsyncFunction("startScreenCast") { receiverId: String, withAudio: Boolean, promise: Promise ->
+      if (pendingScreenCast != null) {
+        promise.reject("ERR_PICK_IN_PROGRESS", "Screen sharing is already being set up", null)
+        return@AsyncFunction
+      }
+      val activity = appContext.throwingActivity
+      val manager = context.getSystemService(MediaProjectionManager::class.java)
+      if (manager == null) {
+        promise.reject("ERR_SCREEN", "This phone does not support screen sharing", null)
+        return@AsyncFunction
+      }
+      pendingScreenCast = promise
+      pendingScreenReceiver = receiverId
+      pendingScreenAudio = withAudio
+      try {
+        activity.startActivityForResult(manager.createScreenCaptureIntent(), SCREEN_CAST_REQUEST_CODE)
+      } catch (e: ActivityNotFoundException) {
+        pendingScreenCast = null
+        promise.reject("ERR_SCREEN", "This phone does not support screen sharing", e)
+      }
+    }
+
+    AsyncFunction("startCast") { promise: Promise ->
+      val appContext = context
+      castExecutor.execute {
+        try {
+          promise.resolve(CastSession.start(appContext))
+        } catch (e: CastSession.NoNetworkException) {
+          promise.reject("ERR_NO_NETWORK", "Connect the phone to Wi-Fi or turn on its hotspot", e)
+        } catch (e: IOException) {
+          promise.reject("ERR_CAST_SERVER", e.message ?: "Could not start casting", e)
+        }
+      }
+    }
+
+    AsyncFunction("stopCast") {
+      CastSession.stop(context)
+    }
+
+    AsyncFunction("getCastState") {
+      CastSession.snapshot()
+    }
+
+    AsyncFunction("forgetCastReceivers") {
+      CastSession.forgetReceivers(context)
     }
 
     AsyncFunction("scanVideos") { promise: Promise ->
@@ -143,6 +226,22 @@ class VlcPlayerModule : Module() {
     }
 
     OnActivityResult { _, (requestCode, resultCode, intent) ->
+      if (requestCode == SCREEN_CAST_REQUEST_CODE) {
+        val screenPromise = pendingScreenCast ?: return@OnActivityResult
+        val receiverId = pendingScreenReceiver.orEmpty()
+        val withAudio = pendingScreenAudio
+        pendingScreenCast = null
+        pendingScreenReceiver = null
+        if (resultCode != Activity.RESULT_OK || intent == null) {
+          screenPromise.reject("ERR_DENIED", "Screen sharing was not allowed", null)
+          return@OnActivityResult
+        }
+        // The capture itself starts inside the cast service: Android 14+ only allows it once that service runs
+        // with the projection type, and anything that fails afterwards shows on the phone's remote.
+        CastService.startProjection(context, resultCode, intent, receiverId, withAudio)
+        screenPromise.resolve(null)
+        return@OnActivityResult
+      }
       if (requestCode == SubtitleFinder.REQUEST_CODE) {
         val subtitlePromise = pendingSubtitlePick ?: return@OnActivityResult
         pendingSubtitlePick = null

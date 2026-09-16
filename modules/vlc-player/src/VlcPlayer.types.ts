@@ -204,6 +204,56 @@ export type AudioTrackInfo = {
 };
 export type SubtitleTrackInfo = { id: number; codec: string; language: string; description: string };
 
+/** How a laptop reaches the phone: the same Wi-Fi, the phone's hotspot, or another local network. */
+export type CastNetworkKind = 'wifi' | 'hotspot' | 'lan';
+
+/** A laptop browser that opened the receiver page and paired. */
+export type CastReceiver = {
+  id: string;
+  /** e.g. "Chrome · Linux" */
+  name: string;
+  browser: string;
+  os: string;
+  /** Epoch milliseconds */
+  connectedAt: number;
+};
+
+export type CastState = {
+  running: boolean;
+  /** http://<phone IP>:<port>; null while stopped or while the phone has no Wi-Fi or hotspot address */
+  address: string | null;
+  network: CastNetworkKind | null;
+  /** 4-digit code a new laptop enters once; null while stopped. Renewed after many wrong guesses. */
+  code: string | null;
+  receivers: CastReceiver[];
+};
+
+/** What the laptop's video is doing; `disconnected` while that laptop has no connection to the phone. */
+export type CastPlaybackStatus = 'loading' | 'blocked' | 'buffering' | 'playing' | 'paused' | 'ended' | 'error' | 'disconnected';
+
+/** What a laptop is showing: a video file, or the mirrored phone screen. */
+export type CastPlaybackKind = 'video' | 'screen';
+
+/** What a laptop is showing, as last reported by its page (about once a second). */
+export type CastPlayback = {
+  receiverId: string;
+  receiverName: string;
+  kind: CastPlaybackKind;
+  /** Empty while mirroring the screen */
+  uri: string;
+  title: string;
+  status: CastPlaybackStatus;
+  /** Mirroring only: the captured sound is being replaced with silence. */
+  muted: boolean;
+  positionMs: number;
+  durationMs: number;
+  /** Set when status is `error` */
+  error: string | null;
+};
+
+/** `mute` and `unmute` apply to mirroring only. */
+export type CastControlAction = 'play' | 'pause' | 'seek' | 'stop' | 'mute' | 'unmute';
+
 export type MediaInfo = {
   duration: number;
   video: VideoTrackInfo[];
