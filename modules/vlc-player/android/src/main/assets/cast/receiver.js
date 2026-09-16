@@ -692,6 +692,17 @@
     $('player-fullscreen').setAttribute('aria-label', fullscreen ? 'Exit full screen' : 'Full screen');
   });
 
+  // A background tab has its timers slowed right down, so reconnect as soon as the tab or the network comes back.
+  function reconnectNow() {
+    if (stopped || socket || document.hidden) return;
+    reconnectDelay = RECONNECT_MIN_MS;
+    connect();
+  }
+
+  document.addEventListener('visibilitychange', reconnectNow);
+  window.addEventListener('focus', reconnectNow);
+  window.addEventListener('online', reconnectNow);
+
   $('reconnect-button').addEventListener('click', () => {
     stopped = false;
     failedAttempts = 0;

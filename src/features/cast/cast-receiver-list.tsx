@@ -33,7 +33,8 @@ export function CastReceiverList({ receivers, onForgetLaptops, onPlayHere, onMir
         <View style={styles.row} accessibilityLiveRegion="polite">
           <ActivityIndicator color={theme.accent} accessibilityLabel="Waiting for a laptop" />
           <ThemedText type="small" themeColor="textSecondary" style={styles.text}>
-            Waiting for a laptop. Open the address above in its browser and it shows up here.
+            Waiting for a laptop. Open the address above in its browser and it shows up here. If nothing appears, the
+            Wi-Fi may keep devices apart, which guest networks usually do; the phone&apos;s hotspot always works.
           </ThemedText>
         </View>
       ) : (

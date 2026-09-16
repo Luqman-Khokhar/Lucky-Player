@@ -10,6 +10,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.projection.MediaProjection
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -37,6 +38,7 @@ internal class ScreenCastSession(
   private val handler = Handler(Looper.getMainLooper())
   private val lock = Any()
 
+  private var videoBitrate = 0
   private var videoEncoder: MediaCodec? = null
   private var audioEncoder: MediaCodec? = null
   private var inputSurface: Surface? = null
@@ -72,7 +74,9 @@ internal class ScreenCastSession(
     projection.registerCallback(projectionCallback, handler)
     val size = captureSize()
     val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-    encoder.configure(videoFormatFor(size.first, size.second), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+    val format = videoFormatFor(size.first, size.second)
+    videoBitrate = format.getInteger(MediaFormat.KEY_BIT_RATE)
+    encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
     val surface = encoder.createInputSurface()
     encoder.start()
     videoEncoder = encoder
@@ -156,7 +160,12 @@ internal class ScreenCastSession(
 
   private fun drainVideo(encoder: MediaCodec) {
     val info = MediaCodec.BufferInfo()
+    val bitrate = BitrateController(videoBitrate, TARGET_AHEAD_MS)
     while (running) {
+      bitrate.update(bufferedAheadMs)?.let { target ->
+        Log.i(TAG, "Mirroring at ${target / 1000} kbps")
+        runCatching { encoder.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, target) }) }
+      }
       if (bufferedAheadMs > MAX_BUFFER_AHEAD_MS) {
         Thread.sleep(PACING_SLEEP_MS)
         continue
@@ -304,6 +313,8 @@ internal class ScreenCastSession(
     private const val FRAME_GAP_US = 1_000_000L / FRAME_RATE
     private const val FRAGMENT_US = 500_000L
     private const val MAX_BUFFER_AHEAD_MS = 4_000L
+    /** A mirrored screen should stay close to live, so the lead it aims for is short. */
+    private const val TARGET_AHEAD_MS = 2_000L
     private const val PACING_SLEEP_MS = 20L
     private const val DEQUEUE_TIMEOUT_US = 10_000L
     private const val STOP_TIMEOUT_MS = 1_500L

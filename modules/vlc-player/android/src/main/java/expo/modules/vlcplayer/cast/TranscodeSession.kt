@@ -6,6 +6,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import android.os.Bundle
 import android.util.Log
 import android.view.Surface
 import expo.modules.vlcplayer.VlcEngine
@@ -98,6 +99,7 @@ internal class TranscodeSession(
     private val pendingVideo = mutableListOf<Fmp4Writer.Sample>()
     private val pendingAudio = mutableListOf<Fmp4Writer.Sample>()
     private var videoFragmentUs = 0L
+    private var bitrate: BitrateController? = null
     private var extractorDone = false
     private var videoDecoderDone = false
     private var audioDecoderDone = false
@@ -116,8 +118,10 @@ internal class TranscodeSession(
       val frameRate = if (videoFormat.containsKey(MediaFormat.KEY_FRAME_RATE)) videoFormat.getInteger(MediaFormat.KEY_FRAME_RATE) else DEFAULT_FRAME_RATE
       frameDurationUs = 1_000_000L / frameRate.coerceIn(1, 120)
 
+      val encoderFormat = encoderFormat(width, height, frameRate)
+      bitrate = BitrateController(encoderFormat.getInteger(MediaFormat.KEY_BIT_RATE), TARGET_AHEAD_MS)
       videoEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-      videoEncoder.configure(encoderFormat(width, height, frameRate), null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+      videoEncoder.configure(encoderFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
       encoderSurface = videoEncoder.createInputSurface()
       videoEncoder.start()
 
@@ -182,6 +186,10 @@ internal class TranscodeSession(
         if (startedAt == 0L && encodedFrames > 0) {
           startedAt = now
           loggedAt = now
+        }
+        bitrate?.update(bufferedAheadMs)?.let { target ->
+          Log.i(TAG, "Wi-Fi is keeping up with ${target / 1000} kbps; switching the picture to it")
+          videoEncoder.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, target) })
         }
         if (startedAt > 0 && now - loggedAt >= STATS_INTERVAL_MS) {
           val seconds = (now - startedAt) / 1000.0
@@ -370,6 +378,8 @@ internal class TranscodeSession(
     private const val IDLE_SLEEP_MS = 2L
     private const val FEED_PER_PASS = 4
     private const val STATS_INTERVAL_MS = 5_000L
+    /** How far ahead the laptop should stay; the bitrate follows whether it manages. */
+    private const val TARGET_AHEAD_MS = 8_000L
     private const val STOP_TIMEOUT_MS = 2_000L
     private const val DEFAULT_FRAME_RATE = 30
     private const val AAC_SAMPLES_PER_FRAME = 1024L
