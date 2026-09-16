@@ -3,6 +3,7 @@ package expo.modules.vlcplayer
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
@@ -11,6 +12,8 @@ import expo.modules.vlcplayer.cast.CastSession
 import java.io.IOException
 import java.util.concurrent.Executors
 
+private const val SCREEN_CAST_REQUEST_CODE = 7411
+
 class VlcPlayerModule : Module() {
   private val context: Context
     get() = requireNotNull(appContext.reactContext) { "React context is not available" }
@@ -18,6 +21,9 @@ class VlcPlayerModule : Module() {
   private var pendingPick: Promise? = null
   private var pendingFolderPick: Promise? = null
   private var pendingSubtitlePick: Promise? = null
+  private var pendingScreenCast: Promise? = null
+  private var pendingScreenReceiver: String? = null
+  private var pendingScreenAudio = false
 
   private val scanExecutor = Executors.newSingleThreadExecutor()
 
@@ -62,6 +68,28 @@ class VlcPlayerModule : Module() {
 
     AsyncFunction("getCastPlayback") {
       CastSession.playbackSnapshot()
+    }
+
+    AsyncFunction("startScreenCast") { receiverId: String, withAudio: Boolean, promise: Promise ->
+      if (pendingScreenCast != null) {
+        promise.reject("ERR_PICK_IN_PROGRESS", "Screen sharing is already being set up", null)
+        return@AsyncFunction
+      }
+      val activity = appContext.throwingActivity
+      val manager = context.getSystemService(MediaProjectionManager::class.java)
+      if (manager == null) {
+        promise.reject("ERR_SCREEN", "This phone does not support screen sharing", null)
+        return@AsyncFunction
+      }
+      pendingScreenCast = promise
+      pendingScreenReceiver = receiverId
+      pendingScreenAudio = withAudio
+      try {
+        activity.startActivityForResult(manager.createScreenCaptureIntent(), SCREEN_CAST_REQUEST_CODE)
+      } catch (e: ActivityNotFoundException) {
+        pendingScreenCast = null
+        promise.reject("ERR_SCREEN", "This phone does not support screen sharing", e)
+      }
     }
 
     AsyncFunction("startCast") { promise: Promise ->
@@ -197,6 +225,36 @@ class VlcPlayerModule : Module() {
     }
 
     OnActivityResult { _, (requestCode, resultCode, intent) ->
+      if (requestCode == SCREEN_CAST_REQUEST_CODE) {
+        val screenPromise = pendingScreenCast ?: return@OnActivityResult
+        val receiverId = pendingScreenReceiver.orEmpty()
+        val withAudio = pendingScreenAudio
+        pendingScreenCast = null
+        pendingScreenReceiver = null
+        if (resultCode != Activity.RESULT_OK || intent == null) {
+          screenPromise.reject("ERR_DENIED", "Screen sharing was not allowed", null)
+          return@OnActivityResult
+        }
+        val appContext = context
+        val manager = appContext.getSystemService(MediaProjectionManager::class.java)
+        castExecutor.execute {
+          try {
+            // The token works once, so the projection is built here and handed straight to the session.
+            val projection = manager?.getMediaProjection(resultCode, intent)
+            if (projection == null) {
+              screenPromise.reject("ERR_SCREEN", "This phone did not allow screen sharing", null)
+            } else {
+              CastSession.startScreenCast(appContext, receiverId, projection, withAudio)
+              screenPromise.resolve(null)
+            }
+          } catch (e: CastSession.CastException) {
+            screenPromise.reject(e.code, e.message ?: "Could not share the screen", e)
+          } catch (e: RuntimeException) {
+            screenPromise.reject("ERR_SCREEN", e.message ?: "Could not share the screen", e)
+          }
+        }
+        return@OnActivityResult
+      }
       if (requestCode == SubtitleFinder.REQUEST_CODE) {
         val subtitlePromise = pendingSubtitlePick ?: return@OnActivityResult
         pendingSubtitlePick = null

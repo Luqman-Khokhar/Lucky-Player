@@ -30,9 +30,15 @@ export function CastScreen({ pending }: CastScreenProps) {
   const insets = useSafeAreaInsets();
   const cast = useAppSelector((state) => state.cast);
   const actions = useCastActions();
-  const { castTo } = useCastVideo();
+  const { castTo, mirrorScreen } = useCastVideo();
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [castError, setCastError] = useState<string | null>(null);
+
+  const mirrorHere = async (receiver: CastReceiver) => {
+    setCastError(null);
+    const error = await mirrorScreen(receiver.id);
+    if (error) setCastError(error);
+  };
 
   const playHere = async (receiver: CastReceiver) => {
     if (!pending) return;
@@ -102,8 +108,14 @@ export function CastScreen({ pending }: CastScreenProps) {
             receivers={cast.receivers}
             onForgetLaptops={actions.forgetLaptops}
             onPlayHere={pending ? playHere : undefined}
+            onMirror={mirrorHere}
             sendingTo={sendingTo}
           />
+          {castError && !pending ? (
+            <ThemedText type="small" themeColor="danger">
+              {castError}
+            </ThemedText>
+          ) : null}
           <Button label="Stop casting" variant="secondary" onPress={actions.stop} />
         </View>
       </ScrollView>

@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
 
 import { savePlaybackState } from '@/db';
+import { ensureRecordAudioPermission } from '@/features/cast/record-audio-permission';
 import { useAppSelector } from '@/store';
 import VlcPlayer from '@modules/vlc-player';
 
@@ -52,5 +53,21 @@ export function useCastVideo() {
     [castTo, receivers, router, running]
   );
 
-  return { castTo, castFromPlayer };
+  /** Mirrors the whole phone screen after Android's screen-capture prompt. */
+  const mirrorScreen = useCallback(
+    async (receiverId: string): Promise<string | null> => {
+      const withAudio = await ensureRecordAudioPermission().catch(() => false);
+      try {
+        await VlcPlayer.startScreenCast(receiverId, withAudio);
+        router.replace('/cast-remote');
+        return null;
+      } catch (cause) {
+        if ((cause as { code?: string } | null)?.code === 'ERR_DENIED') return null;
+        return messageOf(cause);
+      }
+    },
+    [router]
+  );
+
+  return { castTo, castFromPlayer, mirrorScreen };
 }

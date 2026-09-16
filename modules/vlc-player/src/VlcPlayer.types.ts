@@ -231,10 +231,15 @@ export type CastState = {
 /** What the laptop's video is doing; `disconnected` while that laptop has no connection to the phone. */
 export type CastPlaybackStatus = 'loading' | 'blocked' | 'buffering' | 'playing' | 'paused' | 'ended' | 'error' | 'disconnected';
 
-/** The video a laptop plays, as last reported by its page (about once a second). */
+/** What a laptop is showing: a video file, or the mirrored phone screen. */
+export type CastPlaybackKind = 'video' | 'screen';
+
+/** What a laptop is showing, as last reported by its page (about once a second). */
 export type CastPlayback = {
   receiverId: string;
   receiverName: string;
+  kind: CastPlaybackKind;
+  /** Empty while mirroring the screen */
   uri: string;
   title: string;
   status: CastPlaybackStatus;

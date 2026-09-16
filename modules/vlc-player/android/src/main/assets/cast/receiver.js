@@ -318,14 +318,15 @@
 
   function loadMedia(message) {
     const token = String(message.token || '');
-    const converted = message.kind === 'stream';
+    // A converted file and the mirrored phone screen both arrive as fragments; the screen has no length or seeking.
+    const converted = message.kind === 'stream' || message.kind === 'screen';
     if (!converted && current && current.token === token && video.getAttribute('src') === message.url) {
       // Reconnected mid-video: this page kept playing, so only the phone needs the current state.
       report();
       return;
     }
     resetMedia();
-    current = { token, title: String(message.title || 'Video'), converted };
+    current = { token, title: String(message.title || 'Video'), converted, live: message.kind === 'screen' };
     $('video-title').textContent = current.title;
     document.title = `${current.title} · Lucky Player`;
     show('player');
@@ -359,6 +360,7 @@
       mimeType: String(message.mimeType || STREAM_TYPES['fmp4-h264-aac']),
       startMs: Math.max(0, Number(message.startMs) || 0),
       durationMs: Math.max(0, Number(message.durationMs) || 0),
+      live: message.kind === 'screen',
       url: URL.createObjectURL(mediaSource),
     };
     mediaSource.addEventListener('sourceopen', () => {
@@ -413,7 +415,9 @@
 
   function startWhenBuffered() {
     if (!stream || stream.playing) return;
-    if (bufferedAheadMs() < PREBUFFER_MS && !stream.ended) return;
+    // The mirrored screen starts as soon as anything arrives; waiting would only add delay.
+    const cushion = stream.live ? 0 : PREBUFFER_MS;
+    if (bufferedAheadMs() < cushion && !stream.ended) return;
     stream.playing = true;
     setStatus('');
     playVideo();
@@ -456,6 +460,7 @@
   function seekTo(seconds) {
     if (!current || !Number.isFinite(seconds)) return;
     const target = Math.max(0, seconds);
+    if (stream && stream.live) return;
     if (stream) {
       // Only what the phone already sent exists here, so it converts again from the new position.
       send({ type: 'control', action: 'seek', token: current.token, ms: Math.round(target * 1000) });
@@ -560,14 +565,16 @@
     $('icon-play').toggleAttribute('hidden', playing);
     $('icon-pause').toggleAttribute('hidden', !playing);
 
+    const live = Boolean(stream && stream.live);
     const durationS = durationSeconds();
     const positionS = seekingByUser ? Number(seek.value) : absolutePositionS();
-    const timeText = `${formatTime(positionS)} / ${formatTime(durationS)}`;
+    const timeText = live ? formatTime(video.currentTime) : `${formatTime(positionS)} / ${formatTime(durationS)}`;
     $('time').textContent = timeText;
+    seek.hidden = live;
     seek.max = String(Math.max(0, Math.floor(durationS)));
     if (!seekingByUser) seek.value = String(Math.floor(positionS));
     seek.setAttribute('aria-valuetext', timeText);
-    seek.disabled = durationS <= 0;
+    seek.disabled = live || durationS <= 0;
 
     setStatus(status === 'error' ? errorText() : status === 'loading' ? 'Loading…' : status === 'buffering' ? 'Buffering…' : '');
     if (!playing) showControls();

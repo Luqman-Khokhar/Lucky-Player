@@ -50,7 +50,13 @@ class CastService : Service() {
   private fun showNotification(): Boolean = try {
     val notification = CastNotification.build(this, CastSession.snapshot())
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      startForeground(CastNotification.ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+      // The projection type may only be claimed while a screen capture is actually running.
+      val types = if (projecting.get()) {
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+      } else {
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+      }
+      startForeground(CastNotification.ID, notification, types)
     } else {
       startForeground(CastNotification.ID, notification)
     }
@@ -89,6 +95,24 @@ class CastService : Service() {
 
   companion object {
     const val ACTION_STOP = "expo.modules.vlcplayer.cast.STOP"
+    private const val ACTION_PROJECTION = "expo.modules.vlcplayer.cast.PROJECTION"
+
+    private val projecting = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Claims or drops the screen-capture service type. Call before starting a capture and after stopping it. */
+    fun setProjecting(context: Context, active: Boolean) {
+      if (!projecting.compareAndSet(!active, active)) return
+      val intent = Intent(context, CastService::class.java).setAction(ACTION_PROJECTION)
+      try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          context.startForegroundService(intent)
+        } else {
+          context.startService(intent)
+        }
+      } catch (e: IllegalStateException) {
+        Log.w(TAG, "Could not update the cast service type", e)
+      }
+    }
 
     private const val TAG = "CastService"
     private const val WIFI_LOCK_TAG = "LuckyPlayer:cast"

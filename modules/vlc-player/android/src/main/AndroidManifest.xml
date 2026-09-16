@@ -8,6 +8,8 @@
   <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
   <uses-permission android:name="android.permission.WAKE_LOCK" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
   <application>
     <service
@@ -21,6 +23,6 @@
     <service
       android:name="expo.modules.vlcplayer.cast.CastService"
       android:exported="false"
-      android:foregroundServiceType="mediaPlayback" />
+      android:foregroundServiceType="mediaPlayback|mediaProjection" />
   </application>
 </manifest>

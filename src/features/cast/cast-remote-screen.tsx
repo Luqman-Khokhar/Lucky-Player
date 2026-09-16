@@ -27,6 +27,8 @@ export function CastRemoteScreen() {
   const skipSeconds = Math.round(remote.seekStepMs / 1000);
   const [rewindIcon, forwardIcon] = SKIP_ICONS[skipSeconds] ?? SKIP_ICONS[10];
   const connected = playback !== null && playback.status !== 'disconnected';
+  // The phone screen is live: nothing to seek, pause or queue.
+  const mirroring = playback?.kind === 'screen';
 
   return (
     <View
@@ -52,7 +54,7 @@ export function CastRemoteScreen() {
         <View style={styles.column}>
           <View style={styles.hero}>
             <View style={[styles.heroIcon, { backgroundColor: theme.playerScrim }]}>
-              <Icon name="cast_connected" size={56} color={theme.playerAccent} />
+              <Icon name={mirroring ? 'screen_share' : 'cast_connected'} size={56} color={theme.playerAccent} />
             </View>
             <ThemedText accessibilityRole="header" numberOfLines={2} style={[styles.title, { color: theme.playerText }]}>
               {playback.title}
@@ -65,6 +67,7 @@ export function CastRemoteScreen() {
             </View>
           </View>
 
+          {mirroring ? null : (
           <View>
             <SeekBar position={remote.position} duration={remote.duration} skipMs={remote.seekStepMs} onSeek={remote.seekTo} />
             <View style={styles.times}>
@@ -76,7 +79,9 @@ export function CastRemoteScreen() {
               </ThemedText>
             </View>
           </View>
+          )}
 
+          {mirroring ? null : (
           <View style={styles.controls}>
             <IconButton icon="skip_previous" label="Previous video" disabled={!remote.playPrevious} {...colors} onPress={() => remote.playPrevious?.()} />
             <IconButton icon={rewindIcon} label={`Rewind ${skipSeconds} seconds`} size="lg" disabled={!connected} {...colors} onPress={() => remote.skip(-remote.seekStepMs)} />
@@ -92,6 +97,7 @@ export function CastRemoteScreen() {
             <IconButton icon={forwardIcon} label={`Forward ${skipSeconds} seconds`} size="lg" disabled={!connected} {...colors} onPress={() => remote.skip(remote.seekStepMs)} />
             <IconButton icon="skip_next" label="Next video" disabled={!remote.playNext} {...colors} onPress={() => remote.playNext?.()} />
           </View>
+          )}
 
           {remote.notice ? (
             <ThemedText type="small" accessibilityLiveRegion="polite" style={[styles.notice, { color: theme.playerText, backgroundColor: theme.playerSheet }]}>
@@ -100,8 +106,8 @@ export function CastRemoteScreen() {
           ) : null}
 
           <View style={styles.actions}>
-            <Button label="Play on phone" variant="secondary" onPress={remote.playOnPhone} />
-            <Button label="Stop video" variant="secondary" onPress={remote.stopVideo} />
+            {mirroring ? null : <Button label="Play on phone" variant="secondary" onPress={remote.playOnPhone} />}
+            <Button label={mirroring ? 'Stop sharing' : 'Stop video'} variant="secondary" onPress={remote.stopVideo} />
           </View>
         </View>
       ) : (

@@ -89,6 +89,11 @@ declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
   /** `positionMs` is used by seek only. */
   castControl(action: CastControlAction, positionMs: number): Promise<void>;
   getCastPlayback(): Promise<CastPlayback | null>;
+  /**
+   * Mirrors the phone screen to a laptop, after Android's screen-capture prompt. With `withAudio`, what the phone
+   * plays is sent too, which needs the microphone permission. Rejects with ERR_DENIED when the prompt is refused.
+   */
+  startScreenCast(receiverId: string, withAudio: boolean): Promise<void>;
 }
 
 export default requireNativeModule<VlcPlayerModule>('VlcPlayer');

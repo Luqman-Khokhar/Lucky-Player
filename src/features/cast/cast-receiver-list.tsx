@@ -13,12 +13,14 @@ type CastReceiverListProps = {
   onForgetLaptops: () => void;
   /** Shows a Play here button per laptop when a video is waiting for one. */
   onPlayHere?: (receiver: CastReceiver) => void;
+  /** Shows a Mirror screen button per laptop. */
+  onMirror?: (receiver: CastReceiver) => void;
   /** Laptop the video is being sent to right now. */
   sendingTo?: string | null;
 };
 
 /** Laptops connected right now, or a waiting hint while there are none. */
-export function CastReceiverList({ receivers, onForgetLaptops, onPlayHere, sendingTo }: CastReceiverListProps) {
+export function CastReceiverList({ receivers, onForgetLaptops, onPlayHere, onMirror, sendingTo }: CastReceiverListProps) {
   const theme = useTheme();
 
   return (
@@ -53,6 +55,14 @@ export function CastReceiverList({ receivers, onForgetLaptops, onPlayHere, sendi
                   accessibilityHint={`Plays the video on ${receiver.name}`}
                 />
               ) : null}
+              {onMirror ? (
+                <Button
+                  label="Mirror screen"
+                  variant="secondary"
+                  onPress={() => onMirror(receiver)}
+                  accessibilityHint={`Shows everything on this phone's screen on ${receiver.name}`}
+                />
+              ) : null}
             </View>
           ))}
         </View>
@@ -80,9 +90,11 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    flexWrap: 'wrap',
+    gap: Spacing.two,
   },
   text: {
     flex: 1,
+    minWidth: 120,
   },
 });
