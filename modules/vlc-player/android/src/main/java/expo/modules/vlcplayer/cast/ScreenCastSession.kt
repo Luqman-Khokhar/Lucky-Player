@@ -10,6 +10,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.projection.MediaProjection
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -68,9 +69,8 @@ internal class ScreenCastSession(
   fun start() {
     if (running) return
     running = true
-    // Android 14+ refuses screen capture unless a foreground service already runs with the projection type.
-    CastService.setProjecting(context, true)
-    // It also requires the callback before a virtual display exists.
+    // The service already claimed the projection type, which Android 14+ requires before any capture.
+    // Android also requires the callback before a virtual display exists.
     projection.registerCallback(projectionCallback, handler)
     val size = captureSize()
     val encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
@@ -91,7 +91,7 @@ internal class ScreenCastSession(
       null,
       handler
     )
-    videoThread = Thread({ drainVideo(encoder) }, "cast-screen-video").apply {
+    videoThread = Thread({ guard("video") { drainVideo(encoder) } }, "cast-screen-video").apply {
       isDaemon = true
       start()
     }
@@ -152,9 +152,22 @@ internal class ScreenCastSession(
     record.startRecording()
     recorder = record
     audioEncoder = encoder
-    audioThread = Thread({ captureAudio(record, encoder) }, "cast-screen-audio").apply {
+    audioThread = Thread({ guard("audio") { captureAudio(record, encoder) } }, "cast-screen-audio").apply {
       isDaemon = true
       start()
+    }
+  }
+
+  /** A failure in a capture thread must end screen sharing, never take the app down with it. */
+  private fun guard(what: String, block: () -> Unit) {
+    try {
+      block()
+    } catch (e: RuntimeException) {
+      if (!running) return
+      Log.w(TAG, "Screen sharing $what failed", e)
+      running = false
+      listener.onError("Screen sharing stopped because the phone could not keep capturing.")
+      handler.post { stop() }
     }
   }
 
@@ -200,10 +213,21 @@ internal class ScreenCastSession(
     while (running) {
       val read = record.read(buffer, 0, buffer.size)
       if (read > 0) {
-        val index = encoder.dequeueInputBuffer(DEQUEUE_TIMEOUT_US)
-        if (index >= 0) {
-          encoder.getInputBuffer(index)?.put(buffer, 0, read)
-          encoder.queueInputBuffer(index, 0, read, System.nanoTime() / 1000L, 0)
+        // The encoder's input buffers are smaller than one read, so a read is spread over as many as it takes.
+        val readAtUs = System.nanoTime() / 1000L
+        var offset = 0
+        while (offset < read && running) {
+          val index = encoder.dequeueInputBuffer(DEQUEUE_TIMEOUT_US)
+          if (index < 0) break
+          val input = encoder.getInputBuffer(index)
+          if (input == null) {
+            encoder.queueInputBuffer(index, 0, 0, 0, 0)
+            break
+          }
+          val size = minOf(read - offset, input.remaining())
+          input.put(buffer, offset, size)
+          encoder.queueInputBuffer(index, 0, size, readAtUs + offset * 1_000_000L / BYTES_PER_SECOND, 0)
+          offset += size
         }
       }
       while (true) {
@@ -296,6 +320,10 @@ internal class ScreenCastSession(
       setInteger(MediaFormat.KEY_PRIORITY, 0)
       // A still screen produces no frames; without this the laptop's playback would stall.
       setInteger(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, FRAME_GAP_US.toInt())
+      // Hand each frame over as soon as it is encoded instead of holding a few back.
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) setInteger(MediaFormat.KEY_LATENCY, 1)
+      // An even data rate travels over Wi-Fi better than bursts around each keyframe.
+      setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
     }
 
   private fun audioFormatFor(): MediaFormat =
@@ -306,22 +334,29 @@ internal class ScreenCastSession(
 
   companion object {
     private const val TAG = "ScreenCastSession"
-    private const val MAX_WIDTH = 1920
-    private const val MAX_HEIGHT = 1080
+    // 720p-class: a phone screen still reads well on a laptop, and less to encode and send means less delay.
+    private const val MAX_WIDTH = 1280
+    private const val MAX_HEIGHT = 720
     private const val FRAME_RATE = 30
+    // Keyframes are big and arrive in one burst; every two seconds keeps those bursts from stalling playback.
     private const val I_FRAME_INTERVAL_S = 2
     private const val FRAME_GAP_US = 1_000_000L / FRAME_RATE
-    private const val FRAGMENT_US = 500_000L
-    private const val MAX_BUFFER_AHEAD_MS = 4_000L
-    /** A mirrored screen should stay close to live, so the lead it aims for is short. */
-    private const val TARGET_AHEAD_MS = 2_000L
+    // A mirrored screen is watched live, so everything here is sized for delay rather than for a smooth cushion:
+    // a fragment every couple of frames, almost no lead, and a bitrate that aims to keep it that way.
+    private const val FRAGMENT_US = 50_000L
+    // The cap has to sit well above the quality controller's "doing fine" mark, or the two fight each other and the
+    // picture keeps stepping up and down.
+    private const val MAX_BUFFER_AHEAD_MS = 1_200L
+    private const val TARGET_AHEAD_MS = 400L
     private const val PACING_SLEEP_MS = 20L
     private const val DEQUEUE_TIMEOUT_US = 10_000L
     private const val STOP_TIMEOUT_MS = 1_500L
     private const val SAMPLE_RATE = 48_000
     private const val AUDIO_BITRATE = 160_000
     private const val AUDIO_BUFFER_BYTES = 128 * 1024
-    private const val AUDIO_CHUNK_BYTES = 8 * 1024
+    private const val AUDIO_CHUNK_BYTES = 4 * 1024
+    /** 48 kHz, stereo, 16-bit: what one second of captured sound weighs. */
+    private const val BYTES_PER_SECOND = SAMPLE_RATE * 2 * 2
     private const val AAC_FRAME_US = 1024L * 1_000_000L / SAMPLE_RATE
   }
 }

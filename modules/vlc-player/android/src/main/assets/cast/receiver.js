@@ -18,6 +18,14 @@
   const KEEP_BEHIND_S = 15;
   // How much converted video to collect before playback starts.
   const PREBUFFER_MS = 4000;
+  // Mirroring: how far behind live before jumping, where to land, and the catch-up speed for a small lag.
+  // Landing too close to live leaves nothing to absorb a Wi-Fi hiccup, which shows up as buffering.
+  const LIVE_JUMP_S = 1;
+  const LIVE_TARGET_S = 0.35;
+  const LIVE_CATCH_UP_RATE = 1.15;
+  // Stall recovery: how big a hole in the buffer to step over, and where to land inside the next piece.
+  const MAX_GAP_SKIP_S = 3;
+  const GAP_SKIP_MARGIN_S = 0.05;
 
   // Probed once and reported to the phone, which decides per video whether the file can be sent as is.
   const DIRECT_TYPES = {
@@ -389,6 +397,8 @@
 
   function appendNext() {
     if (!stream || !stream.sourceBuffer || stream.sourceBuffer.updating) return;
+    // Checked on every fragment, not only on the video element's own timer, so drift is caught early.
+    keepUpWithLive();
     if (stream.queue.length === 0) {
       if (stream.ended && stream.mediaSource.readyState === 'open') {
         try {
@@ -421,6 +431,38 @@
     stream.playing = true;
     setStatus('');
     playVideo();
+  }
+
+  // A mirrored screen must stay at the live edge: any delay the browser picks up would otherwise be permanent.
+  function keepUpWithLive() {
+    if (!stream || !stream.live || !stream.playing || video.paused) return;
+    const buffered = video.buffered;
+    if (buffered.length === 0) return;
+    const behind = buffered.end(buffered.length - 1) - video.currentTime;
+    if (behind > LIVE_JUMP_S) {
+      video.currentTime = buffered.end(buffered.length - 1) - LIVE_TARGET_S;
+      video.playbackRate = 1;
+      return;
+    }
+    // Slightly behind: catch up by playing a touch faster, which is less jarring than a jump.
+    const wanted = behind > LIVE_TARGET_S * 2 ? LIVE_CATCH_UP_RATE : 1;
+    if (video.playbackRate !== wanted) video.playbackRate = wanted;
+  }
+
+  /**
+   * A stall with video already buffered further on means the playhead sits in a gap, which the browser will not
+   * cross by itself. Stepping over it is the difference between a blink and playback stopping for good.
+   */
+  function skipBufferGap() {
+    if (!current) return;
+    const buffered = video.buffered;
+    for (let index = 0; index < buffered.length; index++) {
+      const start = buffered.start(index);
+      if (start > video.currentTime && start - video.currentTime < MAX_GAP_SKIP_S) {
+        video.currentTime = start + GAP_SKIP_MARGIN_S;
+        return;
+      }
+    }
   }
 
   // Long videos fill the browser's buffer; the part already watched is what goes.
@@ -478,6 +520,7 @@
     current = null;
     pendingStartS = null;
     video.pause();
+    video.playbackRate = 1;
     video.removeAttribute('src');
     if (stream) {
       if (stream.sourceBuffer) stream.sourceBuffer.removeEventListener('updateend', appendNext);
@@ -615,7 +658,12 @@
       report();
     });
   }
-  video.addEventListener('timeupdate', updatePlayerUi);
+  video.addEventListener('timeupdate', () => {
+    updatePlayerUi();
+    keepUpWithLive();
+  });
+  video.addEventListener('waiting', skipBufferGap);
+  video.addEventListener('stalled', skipBufferGap);
   video.addEventListener('dblclick', toggleFullscreen);
   setInterval(report, STATE_REPORT_MS);
 

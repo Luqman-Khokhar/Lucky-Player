@@ -78,13 +78,15 @@ internal class Fmp4Writer(videoFormat: MediaFormat, audioFormat: MediaFormat?) {
     moof.write(type("mfhd"))
     moof.write(int32(0))
     moof.write(int32(++sequence))
+    // Each fragment starts at its first sample's own timestamp. Adding up rounded durations instead would drift,
+    // which shows as sound sliding away from the picture and a delay that keeps growing.
     if (video.isNotEmpty()) {
+      videoBaseTime = scale(video.first().ptsUs, VIDEO_TIMESCALE)
       moof.write(traf(VIDEO_TRACK_ID, VIDEO_TIMESCALE, videoBaseTime, video, videoOffset))
-      videoBaseTime += video.sumOf { scale(it.durationUs, VIDEO_TIMESCALE) }
     }
     if (audio.isNotEmpty()) {
+      audioBaseTime = scale(audio.first().ptsUs, audioTimescale)
       moof.write(traf(AUDIO_TRACK_ID, audioTimescale, audioBaseTime, audio, audioOffset))
-      audioBaseTime += audio.sumOf { scale(it.durationUs, audioTimescale) }
     }
 
     val output = ByteArrayOutputStream(moofSize + BOX_HEADER + videoBytes + audioBytes)

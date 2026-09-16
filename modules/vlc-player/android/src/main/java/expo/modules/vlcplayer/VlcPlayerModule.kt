@@ -8,6 +8,7 @@ import android.net.Uri
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.vlcplayer.cast.CastService
 import expo.modules.vlcplayer.cast.CastSession
 import java.io.IOException
 import java.util.concurrent.Executors
@@ -235,24 +236,10 @@ class VlcPlayerModule : Module() {
           screenPromise.reject("ERR_DENIED", "Screen sharing was not allowed", null)
           return@OnActivityResult
         }
-        val appContext = context
-        val manager = appContext.getSystemService(MediaProjectionManager::class.java)
-        castExecutor.execute {
-          try {
-            // The token works once, so the projection is built here and handed straight to the session.
-            val projection = manager?.getMediaProjection(resultCode, intent)
-            if (projection == null) {
-              screenPromise.reject("ERR_SCREEN", "This phone did not allow screen sharing", null)
-            } else {
-              CastSession.startScreenCast(appContext, receiverId, projection, withAudio)
-              screenPromise.resolve(null)
-            }
-          } catch (e: CastSession.CastException) {
-            screenPromise.reject(e.code, e.message ?: "Could not share the screen", e)
-          } catch (e: RuntimeException) {
-            screenPromise.reject("ERR_SCREEN", e.message ?: "Could not share the screen", e)
-          }
-        }
+        // The capture itself starts inside the cast service: Android 14+ only allows it once that service runs
+        // with the projection type, and anything that fails afterwards shows on the phone's remote.
+        CastService.startProjection(context, resultCode, intent, receiverId, withAudio)
+        screenPromise.resolve(null)
         return@OnActivityResult
       }
       if (requestCode == SubtitleFinder.REQUEST_CODE) {

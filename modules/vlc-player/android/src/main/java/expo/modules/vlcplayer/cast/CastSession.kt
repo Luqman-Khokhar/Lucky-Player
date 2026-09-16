@@ -378,6 +378,20 @@ object CastSession {
     emitPlayback()
   }
 
+  /** Shows on the phone's remote why screen sharing could not start. */
+  fun reportScreenCastFailure(receiverId: String, message: String) {
+    val receiver = synchronized(lock) { receivers[receiverId] } ?: return
+    val failed = Active(
+      receiverId, receiver.name, "Phone screen", "", null, newToken(), null, null, convert = true, status = "error",
+      positionMs = 0L, error = message
+    )
+    synchronized(lock) {
+      if (active != null && active?.mirroring != true) return
+      active = failed
+    }
+    emitPlayback()
+  }
+
   /** play, pause, seek (to [positionMs]) or stop for the video being cast. */
   fun castControl(action: String, positionMs: Long) {
     val (current, receiver, context) = synchronized(lock) {
