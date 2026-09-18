@@ -1,6 +1,6 @@
 import { StyleSheet, TextInput, View } from 'react-native';
 
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { Icon } from './icon';
@@ -16,7 +16,7 @@ export function SearchField({ value, onChangeText, placeholder }: SearchFieldPro
   const theme = useTheme();
 
   return (
-    <View style={[styles.field, { backgroundColor: theme.backgroundElement }]}>
+    <View style={[styles.field, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
       <Icon name="search" size={20} color={theme.textSecondary} />
       <TextInput
         value={value}
@@ -44,13 +44,14 @@ export function SearchField({ value, onChangeText, placeholder }: SearchFieldPro
 
 const styles = StyleSheet.create({
   field: {
-    minHeight: 48,
+    minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
     paddingLeft: Spacing.three,
     paddingRight: Spacing.one,
-    borderRadius: Spacing.four,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   input: {
     flex: 1,

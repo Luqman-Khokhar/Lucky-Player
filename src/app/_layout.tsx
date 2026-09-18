@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import { Colors } from '@/constants/theme';
 import { initDatabase } from '@/db';
 import { AudioPlaybackSync } from '@/features/audio/audio-playback-sync';
 import { MiniPlayer } from '@/features/audio/mini-player';
@@ -18,6 +19,32 @@ import { hydrateSound } from '@/store/sound-persistence';
 import VlcPlayer from '@modules/vlc-player';
 
 SplashScreen.preventAutoHideAsync();
+
+/** Navigation's own surfaces (screen background, card, borders) drawn from the app's tokens. */
+const navigationThemes = {
+  light: {
+    ...DefaultTheme,
+    colors: {
+      ...DefaultTheme.colors,
+      primary: Colors.light.accent,
+      background: Colors.light.background,
+      card: Colors.light.background,
+      text: Colors.light.text,
+      border: Colors.light.border,
+    },
+  },
+  dark: {
+    ...DarkTheme,
+    colors: {
+      ...DarkTheme.colors,
+      primary: Colors.dark.accent,
+      background: Colors.dark.background,
+      card: Colors.dark.background,
+      text: Colors.dark.text,
+      border: Colors.dark.border,
+    },
+  },
+};
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -34,7 +61,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <Provider store={store}>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <ThemeProvider value={colorScheme === 'dark' ? navigationThemes.dark : navigationThemes.light}>
           <AnimatedSplashOverlay />
           <SubtitleStyleSync />
           <SoundEffectsSync />

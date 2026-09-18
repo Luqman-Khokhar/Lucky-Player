@@ -11,7 +11,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { Slider } from '@/components/ui/slider';
 import { StateView } from '@/components/ui/state-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Elevation, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { formatTime } from '@/features/player/format-time';
 import { useGoBack } from '@/hooks/use-go-back';
 import { useRouter } from 'expo-router';
@@ -143,7 +143,10 @@ export function NowPlayingScreen() {
 
   return (
     <View style={styles.root} pointerEvents="box-none">
-      <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]} pointerEvents="none" />
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { backgroundColor: theme.shadow }, scrimStyle]}
+        pointerEvents="none"
+      />
       <GestureDetector gesture={swipeDown}>
         <Animated.View style={[styles.root, sheetStyle]}>
           <ThemedView style={styles.root}>
@@ -161,7 +164,12 @@ export function NowPlayingScreen() {
               }
             />
             <View style={[styles.body, { paddingBottom: insets.bottom + Spacing.four }]}>
-              <View style={[styles.art, { width: artSize, height: artSize, backgroundColor: theme.backgroundSelected }]}>
+              <View
+                style={[
+                  styles.art,
+                  Elevation.high,
+                  { width: artSize, height: artSize, backgroundColor: theme.backgroundSelected, shadowColor: theme.shadow },
+                ]}>
                 {audio.uri ? (
                   <AlbumArt uri={audio.uri} artKey={audio.artKey ?? audio.uri} width={artSize} icon="album" />
                 ) : null}
@@ -171,7 +179,7 @@ export function NowPlayingScreen() {
                 <ThemedText type="subtitle" numberOfLines={2} style={styles.title}>
                   {audio.title ?? ''}
                 </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                <ThemedText themeColor="textSecondary" numberOfLines={1}>
                   {audio.artist || 'Unknown artist'}
                 </ThemedText>
               </View>
@@ -187,10 +195,10 @@ export function NowPlayingScreen() {
                   accessibilityValueText={`${formatTime(audio.positionMs)} of ${formatTime(audio.durationMs)}`}
                 />
                 <View style={styles.times}>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
+                  <ThemedText type="caption" themeColor="textTertiary" style={styles.time}>
                     {formatTime(audio.positionMs)}
                   </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
+                  <ThemedText type="caption" themeColor="textTertiary" style={styles.time}>
                     {formatTime(audio.durationMs)}
                   </ThemedText>
                 </View>
@@ -200,7 +208,7 @@ export function NowPlayingScreen() {
                 <IconButton
                   icon={audio.shuffle ? 'shuffle_on' : 'shuffle'}
                   label={audio.shuffle ? 'Shuffle on. Tap to play in order' : 'Shuffle off. Tap to shuffle the queue'}
-                  color={audio.shuffle ? theme.accent : theme.textSecondary}
+                  color={audio.shuffle ? theme.accentText : theme.textSecondary}
                   pressedColor={theme.backgroundSelected}
                   onPress={() => VlcPlayer.audioSetShuffle(!audio.shuffle).catch(warn('shuffle'))}
                 />
@@ -232,7 +240,7 @@ export function NowPlayingScreen() {
                 <IconButton
                   icon={REPEAT_ICON[audio.repeat]}
                   label={REPEAT_LABEL[audio.repeat]}
-                  color={audio.repeat === 'off' ? theme.textSecondary : theme.accent}
+                  color={audio.repeat === 'off' ? theme.textSecondary : theme.accentText}
                   pressedColor={theme.backgroundSelected}
                   onPress={() => VlcPlayer.audioSetRepeat(nextRepeat).catch(warn('repeat'))}
                 />
@@ -246,7 +254,7 @@ export function NowPlayingScreen() {
                   pressedColor={theme.backgroundSelected}
                   onPress={() => router.push('/queue')}
                 />
-                <ThemedText type="small" themeColor="textSecondary">
+                <ThemedText type="caption" themeColor="textTertiary">
                   {audio.queueSize > 1 && audio.index != null ? `Track ${audio.index + 1} of ${audio.queueSize}` : ' '}
                 </ThemedText>
                 <IconButton
@@ -269,9 +277,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  scrim: {
-    backgroundColor: '#000000',
-  },
   body: {
     flex: 1,
     width: '100%',
@@ -283,7 +288,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
   },
   art: {
-    borderRadius: Spacing.three,
+    borderRadius: Radius.xl,
     overflow: 'hidden',
   },
   titles: {
@@ -308,7 +313,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.two,
+    gap: Spacing.three,
   },
   footer: {
     alignSelf: 'stretch',

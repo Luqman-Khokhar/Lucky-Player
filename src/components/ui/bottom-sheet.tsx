@@ -11,7 +11,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { Elevation, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { IconButton } from './icon-button';
@@ -61,7 +61,7 @@ export function BottomSheet({ open, title, onClose, children }: BottomSheetProps
       style={StyleSheet.absoluteFill}
       pointerEvents={open ? 'auto' : 'none'}
       importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}>
-      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: theme.playerBackdrop }, backdropStyle]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: theme.overlay }, backdropStyle]}>
         <Pressable
           style={StyleSheet.absoluteFill}
           accessibilityRole="button"
@@ -74,12 +74,16 @@ export function BottomSheet({ open, title, onClose, children }: BottomSheetProps
         accessibilityViewIsModal
         style={[
           styles.sheet,
+          Elevation.high,
           {
-            backgroundColor: theme.background,
+            backgroundColor: theme.backgroundElement,
+            borderColor: theme.border,
+            shadowColor: theme.shadow,
             paddingBottom: insets.bottom + Spacing.two,
           },
           sheetStyle,
         ]}>
+        <View style={[styles.grabber, { backgroundColor: theme.borderStrong }]} />
         <View style={styles.header}>
           <ThemedText type="subtitle" accessibilityRole="header" numberOfLines={1} style={styles.title}>
             {title}
@@ -107,9 +111,17 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     alignSelf: 'center',
-    borderTopLeftRadius: Spacing.four,
-    borderTopRightRadius: Spacing.four,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    borderTopWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+  },
+  grabber: {
+    width: 40,
+    height: 4,
+    borderRadius: Radius.pill,
+    alignSelf: 'center',
+    marginTop: Spacing.two,
   },
   header: {
     flexDirection: 'row',
@@ -117,7 +129,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingLeft: Spacing.four,
     paddingRight: Spacing.two,
-    paddingTop: Spacing.three,
+    paddingTop: Spacing.two,
   },
   title: {
     flex: 1,

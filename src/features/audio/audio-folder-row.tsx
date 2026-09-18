@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import type { LibraryAudioFolder } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import { formatBytes, formatCount } from '@/utils/format';
@@ -36,7 +36,7 @@ export const AudioFolderRow = memo(function AudioFolderRow({ folder, onPress }: 
       />
       <View style={styles.text}>
         <View style={styles.titleRow}>
-          <Icon name="folder" size={18} color={theme.accent} />
+          <Icon name="folder" size={18} color={theme.accentText} />
           <ThemedText type="small" numberOfLines={1} style={styles.name}>
             {folder.name}
           </ThemedText>
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
   },
   text: {
     flex: 1,

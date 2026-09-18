@@ -4,11 +4,11 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { Spacing } from '@/constants/theme';
+import { Elevation, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-const TRACK_THICKNESS = 6;
-const THUMB_SIZE = 24;
+const TRACK_THICKNESS = 8;
+const THUMB_SIZE = 22;
 const HIT_SIZE = 44;
 
 type SliderProps = {
@@ -124,7 +124,8 @@ export function Slider({
           style={[
             styles.thumb,
             vertical ? styles.verticalThumb : styles.horizontalThumb,
-            { backgroundColor: theme.accent, borderColor: theme.background },
+            Elevation.low,
+            { backgroundColor: theme.accent, borderColor: theme.background, shadowColor: theme.shadow },
             thumbStyle,
           ]}
         />
@@ -145,13 +146,13 @@ const styles = StyleSheet.create({
   },
   horizontalTrack: {
     height: TRACK_THICKNESS,
-    borderRadius: TRACK_THICKNESS / 2,
+    borderRadius: Radius.pill,
     overflow: 'hidden',
   },
   verticalTrack: {
     width: TRACK_THICKNESS,
     flex: 1,
-    borderRadius: TRACK_THICKNESS / 2,
+    borderRadius: Radius.pill,
     overflow: 'hidden',
   },
   horizontalFill: {
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    borderWidth: Spacing.half,
+    borderWidth: 3,
   },
   horizontalThumb: {
     left: 0,

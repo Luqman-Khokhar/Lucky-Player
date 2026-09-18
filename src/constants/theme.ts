@@ -1,54 +1,78 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Design tokens for the app: colors, type, spacing, radii and elevation.
+ *
+ * Colors come in two sets. The `light`/`dark` keys follow the system theme and are used by every
+ * ordinary screen. The `player*` keys are fixed across both themes because they sit on top of video,
+ * which is always dark.
  */
 
 import '@/global.css';
 
 import { Platform } from 'react-native';
 
+/** Controls that sit over video keep the same look in both themes. */
+const player = {
+  playerBackground: '#000000',
+  playerOverlay: 'rgba(0, 0, 0, 0.6)',
+  playerText: '#FFFFFF',
+  playerTrack: 'rgba(255, 255, 255, 0.28)',
+  playerTextSecondary: 'rgba(255, 255, 255, 0.72)',
+  playerScrim: 'rgba(11, 12, 16, 0.62)',
+  playerSheet: 'rgba(18, 19, 25, 0.97)',
+  playerDivider: 'rgba(255, 255, 255, 0.12)',
+  playerPressed: 'rgba(255, 255, 255, 0.18)',
+  playerBackdrop: 'rgba(0, 0, 0, 0.55)',
+  playerAccent: '#9B87FF',
+} as const;
+
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-    accent: '#0B6BCB',
+    text: '#101218',
+    background: '#FFFFFF',
+    /** Cards, fields and other raised blocks. */
+    backgroundElement: '#F3F4F7',
+    backgroundSelected: '#E5E7EC',
+    textSecondary: '#5B6273',
+    /** Third level of text: timestamps, counts, hints. */
+    textTertiary: '#858C9C',
+    accent: '#5B3FD9',
     onAccent: '#FFFFFF',
-    danger: '#CE2C31',
-    playerBackground: '#000000',
-    playerOverlay: 'rgba(0, 0, 0, 0.6)',
-    playerText: '#FFFFFF',
-    playerTrack: 'rgba(255, 255, 255, 0.3)',
-    playerTextSecondary: 'rgba(255, 255, 255, 0.72)',
-    playerScrim: 'rgba(0, 0, 0, 0.5)',
-    playerSheet: 'rgba(22, 23, 27, 0.97)',
-    playerDivider: 'rgba(255, 255, 255, 0.12)',
-    playerPressed: 'rgba(255, 255, 255, 0.16)',
-    playerBackdrop: 'rgba(0, 0, 0, 0.4)',
-    playerAccent: '#5EB1EF',
+    /** Tinted background for a selected or highlighted row. */
+    accentSoft: 'rgba(91, 63, 217, 0.12)',
+    /** Accent tuned for text and icons rather than fills. */
+    accentText: '#4B32C3',
+    danger: '#D62839',
+    dangerSoft: 'rgba(214, 40, 57, 0.12)',
+    success: '#1B8A5A',
+    warning: '#B26A00',
+    /** Hairline between rows and around cards. */
+    border: '#E4E6EC',
+    borderStrong: '#CFD3DC',
+    /** Dim layer behind sheets and dialogs. */
+    overlay: 'rgba(16, 18, 24, 0.45)',
+    shadow: '#101218',
+    ...player,
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-    accent: '#5EB1EF',
-    onAccent: '#000000',
-    danger: '#FF6369',
-    playerBackground: '#000000',
-    playerOverlay: 'rgba(0, 0, 0, 0.6)',
-    playerText: '#FFFFFF',
-    playerTrack: 'rgba(255, 255, 255, 0.3)',
-    playerTextSecondary: 'rgba(255, 255, 255, 0.72)',
-    playerScrim: 'rgba(0, 0, 0, 0.5)',
-    playerSheet: 'rgba(22, 23, 27, 0.97)',
-    playerDivider: 'rgba(255, 255, 255, 0.12)',
-    playerPressed: 'rgba(255, 255, 255, 0.16)',
-    playerBackdrop: 'rgba(0, 0, 0, 0.4)',
-    playerAccent: '#5EB1EF',
+    text: '#F2F4F8',
+    background: '#0A0B0E',
+    backgroundElement: '#16181D',
+    backgroundSelected: '#282C36',
+    textSecondary: '#98A0B0',
+    textTertiary: '#727A8B',
+    accent: '#6D4AF0',
+    onAccent: '#FFFFFF',
+    accentSoft: 'rgba(123, 92, 255, 0.20)',
+    accentText: '#A996FF',
+    danger: '#FF5C68',
+    dangerSoft: 'rgba(255, 92, 104, 0.18)',
+    success: '#3DD68C',
+    warning: '#F5A524',
+    border: '#242832',
+    borderStrong: '#343945',
+    overlay: 'rgba(0, 0, 0, 0.6)',
+    shadow: '#000000',
+    ...player,
   },
 } as const;
 
@@ -87,6 +111,38 @@ export const Spacing = {
   four: 24,
   five: 32,
   six: 64,
+} as const;
+
+/** Corner radii. `pill` is a large number so a shape rounds to its own height. */
+export const Radius = {
+  xs: 6,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 28,
+  pill: 999,
+} as const;
+
+/** Soft shadows for raised surfaces. Android only reads `elevation`, so both are set. */
+export const Elevation = {
+  low: {
+    elevation: 2,
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  medium: {
+    elevation: 6,
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  high: {
+    elevation: 12,
+    shadowOpacity: 0.24,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
+  },
 } as const;
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;

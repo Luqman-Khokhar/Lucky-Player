@@ -6,7 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { IconButton } from '@/components/ui/icon-button';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { formatTime } from '@/features/player/format-time';
 import { SKIP_ICONS } from '@/features/player/player-controls';
 import { SeekBar } from '@/features/player/seek-bar';
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
+    borderRadius: Radius.pill,
     textAlign: 'center',
   },
   actions: {

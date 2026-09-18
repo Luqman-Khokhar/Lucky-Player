@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type Segment<K extends string> = { key: K; label: string };
@@ -22,7 +22,7 @@ export function SegmentedControl<K extends string>({ options, value, onChange, l
     <View
       accessibilityRole="tablist"
       accessibilityLabel={label}
-      style={[styles.group, { backgroundColor: theme.backgroundElement }]}>
+      style={[styles.group, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
       {options.map((option) => {
         const selected = option.key === value;
         return (
@@ -54,18 +54,19 @@ const styles = StyleSheet.create({
   group: {
     flexDirection: 'row',
     alignSelf: 'stretch',
-    padding: Spacing.half,
+    padding: Spacing.one,
     marginHorizontal: Spacing.three,
     marginBottom: Spacing.two,
-    borderRadius: Spacing.four,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   segment: {
     flex: 1,
-    minHeight: 36,
+    minHeight: 38,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.four,
+    borderRadius: Radius.pill,
   },
   label: {
     textAlign: 'center',

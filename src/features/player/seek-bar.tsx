@@ -5,14 +5,14 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from '
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Elevation, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { formatTime } from './format-time';
 
 const HIT_HEIGHT = 44;
-const TRACK_HEIGHT = 4;
-const THUMB_SIZE = 14;
+const TRACK_HEIGHT = 6;
+const THUMB_SIZE = 16;
 const BUBBLE_WIDTH = 76;
 const PROGRESS_TWEEN_MS = 250;
 
@@ -111,7 +111,8 @@ export function SeekBar({ position, duration, skipMs, onSeek, onScrub }: SeekBar
         <View style={[styles.track, { backgroundColor: theme.playerTrack }]}>
           <Animated.View style={[styles.fill, { backgroundColor: theme.playerAccent }, fillStyle]} />
         </View>
-        <Animated.View pointerEvents="none" style={[styles.thumb, { backgroundColor: theme.playerAccent }, thumbStyle]} />
+        <Animated.View pointerEvents="none" style={[styles.thumb, Elevation.low, { backgroundColor: theme.playerAccent, shadowColor: '#000000' }, thumbStyle]}
+        />
         {scrubMs !== null ? (
           <Animated.View pointerEvents="none" style={[styles.bubble, { backgroundColor: theme.playerSheet }, bubbleStyle]}>
             <ThemedText type="smallBold" style={[styles.bubbleText, { color: theme.playerText }]}>
@@ -132,7 +133,7 @@ const styles = StyleSheet.create({
   },
   track: {
     height: TRACK_HEIGHT,
-    borderRadius: TRACK_HEIGHT / 2,
+    borderRadius: Radius.pill,
     overflow: 'hidden',
   },
   fill: {
@@ -152,7 +153,7 @@ const styles = StyleSheet.create({
     bottom: HIT_HEIGHT,
     width: BUBBLE_WIDTH,
     paddingVertical: Spacing.one,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.sm,
     alignItems: 'center',
   },
   bubbleText: {

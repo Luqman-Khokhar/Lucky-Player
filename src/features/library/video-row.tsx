@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { IconButton } from '@/components/ui/icon-button';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import type { LibraryVideo } from '@/db';
 import { formatTime } from '@/features/player/format-time';
 import { useTheme } from '@/hooks/use-theme';
@@ -39,7 +39,7 @@ export const VideoRow = memo(function VideoRow({ video, showFolder = false, onPr
         accessibilityLabel={video.duration > 0 ? `${video.name}, ${formatTime(video.duration)}` : video.name}
         accessibilityHint={video.position > 0 ? 'Resumes playback' : 'Plays the video'}
         onPress={() => onPress(video)}
-        style={({ pressed }) => [styles.main, pressed && { backgroundColor: theme.backgroundElement }]}>
+        style={({ pressed }) => [styles.main, pressed && { backgroundColor: theme.accentSoft }]}>
         <VideoThumbnail
           uri={video.uri}
           thumbnailKey={video.thumbnailKey}
@@ -48,10 +48,10 @@ export const VideoRow = memo(function VideoRow({ video, showFolder = false, onPr
           progress={progress}
         />
         <View style={styles.text}>
-          <ThemedText type="small" numberOfLines={2} style={styles.name}>
+          <ThemedText numberOfLines={2} style={styles.name}>
             {video.name}
           </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+          <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
             {meta}
           </ThemedText>
         </View>
@@ -80,13 +80,16 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
   },
   text: {
     flex: 1,
     gap: Spacing.half,
   },
   name: {
-    fontWeight: 600,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: 700,
+    letterSpacing: -0.2,
   },
 });

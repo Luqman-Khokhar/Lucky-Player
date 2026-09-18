@@ -7,7 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StateView } from '@/components/ui/state-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { createPlaylist, listPlaylists, type Playlist } from '@/db';
 import type { LibrarySectionProps } from '@/features/library/library-section';
 import { useLibraryQuery } from '@/features/library/use-library-query';
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.sm,
   },
   list: {
     paddingBottom: Spacing.four,

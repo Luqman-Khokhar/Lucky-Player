@@ -160,7 +160,7 @@ export function PlaylistDetailScreen({ playlistId, name }: PlaylistDetailScreenP
             <IconButton
               icon={editing ? 'check' : 'edit'}
               label={editing ? 'Done reordering' : 'Reorder and remove tracks'}
-              color={editing ? theme.accent : theme.text}
+              color={editing ? theme.accentText : theme.text}
               pressedColor={theme.backgroundSelected}
               onPress={() => setEditing((value) => !value)}
             />

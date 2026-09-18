@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ScreenHeader } from '@/components/ui/screen-header';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { BoostPanel } from './boost-panel';
@@ -29,7 +29,9 @@ export function SoundScreen() {
     <ThemedView style={styles.root}>
       <ScreenHeader title="Sound" subtitle="Applies to every app on your phone" onBack={() => router.back()} />
       <View style={styles.tabsWrap}>
-        <View style={[styles.tabs, { backgroundColor: theme.backgroundElement }]} accessibilityRole="tablist">
+        <View
+          style={[styles.tabs, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+          accessibilityRole="tablist">
           {TABS.map((item) => {
             const selected = item.id === tab;
             return (
@@ -72,15 +74,16 @@ const styles = StyleSheet.create({
     maxWidth: MaxContentWidth,
     flexDirection: 'row',
     padding: Spacing.one,
-    borderRadius: Spacing.four,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
     gap: Spacing.one,
   },
   tab: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: Spacing.four,
+    borderRadius: Radius.pill,
   },
   content: {
     paddingHorizontal: Spacing.three,

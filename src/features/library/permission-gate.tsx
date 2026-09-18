@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { StateView } from '@/components/ui/state-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAppSelector } from '@/store';
 
@@ -54,7 +54,7 @@ function LimitedAccessBanner({ onAllowAll }: { onAllowAll: () => void }) {
         Player can only see the media you selected.
       </ThemedText>
       <Pressable accessibilityRole="button" hitSlop={Spacing.two} onPress={onAllowAll}>
-        <ThemedText type="smallBold" style={{ color: theme.accent }}>
+        <ThemedText type="smallBold" style={{ color: theme.accentText }}>
           Allow all
         </ThemedText>
       </Pressable>
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.three,
     marginBottom: Spacing.two,
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
   },
   bannerText: {
     flex: 1,

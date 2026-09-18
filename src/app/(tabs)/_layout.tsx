@@ -10,8 +10,9 @@ export default function TabsLayout() {
   return (
     <NativeTabs
       backgroundColor={theme.background}
-      indicatorColor={theme.backgroundSelected}
-      labelStyle={{ selected: { color: theme.text } }}>
+      indicatorColor={theme.accentSoft}
+      tintColor={theme.accentText}
+      labelStyle={{ color: theme.textSecondary, selected: { color: theme.accentText } }}>
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Videos</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="video_library" />

@@ -8,7 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { StateView } from '@/components/ui/state-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useGoBack } from '@/hooks/use-go-back';
 import { useAppSelector } from '@/store';
 import type { CastReceiver } from '@modules/vlc-player';
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
     gap: Spacing.two,
   },
 });
