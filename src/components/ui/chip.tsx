@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { Icon, type IconName } from './icon';
@@ -16,7 +16,7 @@ type ChipProps = {
 
 export function Chip({ label, selected, onPress, icon, accessibilityLabel }: ChipProps) {
   const theme = useTheme();
-  const color = selected ? theme.onAccent : theme.text;
+  const color = selected ? theme.accentText : theme.textSecondary;
 
   return (
     <Pressable
@@ -27,7 +27,10 @@ export function Chip({ label, selected, onPress, icon, accessibilityLabel }: Chi
       hitSlop={Spacing.one}
       style={({ pressed }) => [
         styles.chip,
-        { backgroundColor: selected ? theme.accent : theme.backgroundElement },
+        {
+          backgroundColor: selected ? theme.accentSoft : theme.backgroundElement,
+          borderColor: selected ? theme.accentText : theme.border,
+        },
         pressed && styles.pressed,
       ]}>
       {icon ? <Icon name={icon} size={16} color={color} /> : null}
@@ -40,14 +43,15 @@ export function Chip({ label, selected, onPress, icon, accessibilityLabel }: Chi
 
 const styles = StyleSheet.create({
   chip: {
-    minHeight: 36,
+    minHeight: 38,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.four,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.7,
   },
 });

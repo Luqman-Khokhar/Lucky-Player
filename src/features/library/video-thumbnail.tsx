@@ -3,7 +3,7 @@ import { PixelRatio, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { formatTime } from '@/features/player/format-time';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -70,7 +70,7 @@ export function VideoThumbnail({ uri, thumbnailKey, width, duration, progress = 
 const styles = StyleSheet.create({
   frame: {
     aspectRatio: 16 / 9,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   placeholder: {
@@ -79,8 +79,9 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    paddingHorizontal: Spacing.one,
-    borderRadius: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 1,
+    borderRadius: Radius.xs,
   },
   topLeft: {
     top: Spacing.one,
@@ -100,7 +101,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 3,
+    height: 4,
   },
   progressFill: {
     height: '100%',

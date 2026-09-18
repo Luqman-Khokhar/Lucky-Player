@@ -3,12 +3,15 @@ import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export function SettingsSection({ title, children }: PropsWithChildren<{ title: string }>) {
+  const theme = useTheme();
+
   return (
-    <ThemedView type="backgroundElement" style={styles.card}>
-      <ThemedText type="smallBold" accessibilityRole="header">
+    <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
+      <ThemedText type="label" themeColor="textSecondary" accessibilityRole="header">
         {title}
       </ThemedText>
       {children}
@@ -32,8 +35,9 @@ export function SettingsRow({ label, value }: { label: string; value: string }) 
 const styles = StyleSheet.create({
   card: {
     padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.two,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: Spacing.three,
   },
   row: {
     flexDirection: 'row',

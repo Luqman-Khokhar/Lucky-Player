@@ -2,7 +2,7 @@ import { StyleSheet, Switch, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { DECODER_OPTIONS } from '@/features/player/player-options';
 import { useTheme } from '@/hooks/use-theme';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -121,7 +121,7 @@ export function PlaybackSettingsSection() {
 const styles = StyleSheet.create({
   card: {
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
     gap: Spacing.three,
   },
   group: {

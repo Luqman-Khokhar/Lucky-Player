@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import type { IconName } from '@/components/ui/icon';
 import { IconButton } from '@/components/ui/icon-button';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { formatTime } from './format-time';
@@ -157,8 +157,9 @@ export function PlayerControls(props: PlayerControlsProps) {
               icon={paused ? 'play_arrow' : 'pause'}
               label={paused ? 'Play' : 'Pause'}
               size="xl"
-              backgroundColor={theme.playerScrim}
-              {...colors}
+              color={theme.playerText}
+              backgroundColor={theme.playerAccent}
+              pressedColor={theme.playerAccent}
               onPress={withInteraction(props.onTogglePlay)}
             />
             <IconButton
@@ -172,9 +173,9 @@ export function PlayerControls(props: PlayerControlsProps) {
           </View>
 
           <View style={[styles.bottomPanel, { backgroundColor: theme.playerScrim }]}>
-            <ThemedText type="small" style={[styles.time, { color: theme.playerText }]}>
+            <ThemedText type="smallBold" style={[styles.time, { color: theme.playerText }]}>
               {formatTime(position)}
-              <ThemedText type="small" style={{ color: theme.playerTextSecondary }}>
+              <ThemedText type="smallBold" style={{ color: theme.playerTextSecondary }}>
                 {` / ${formatTime(duration)}`}
               </ThemedText>
             </ThemedText>
@@ -212,14 +213,14 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.one,
-    borderRadius: Spacing.five,
+    borderRadius: Radius.pill,
   },
   bottomPanel: {
     gap: Spacing.half,
     paddingHorizontal: Spacing.two,
     paddingTop: Spacing.two,
     paddingBottom: Spacing.one,
-    borderRadius: Spacing.four,
+    borderRadius: Radius.xl,
   },
   seekRow: {
     flexDirection: 'row',
@@ -237,7 +238,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing.five,
+    gap: Spacing.six - Spacing.three,
   },
   time: {
     paddingHorizontal: Spacing.three,

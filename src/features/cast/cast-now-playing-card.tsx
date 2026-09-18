@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import type { CastPlayback } from '@modules/vlc-player';
 
 import { castStatusText } from './cast-playback-status';
@@ -31,7 +31,7 @@ export function CastNowPlayingCard({ playback, onOpenRemote }: CastNowPlayingCar
 const styles = StyleSheet.create({
   card: {
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
     gap: Spacing.two,
   },
 });

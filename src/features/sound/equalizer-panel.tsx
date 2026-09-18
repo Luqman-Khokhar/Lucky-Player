@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Slider } from '@/components/ui/slider';
 import { StateView } from '@/components/ui/state-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { selectPreset, setCustomGains, setEqualizerEnabled } from '@/store/sound-slice';
@@ -132,7 +132,7 @@ export function EqualizerPanel() {
 const styles = StyleSheet.create({
   card: {
     padding: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
     gap: Spacing.three,
   },
   switchRow: {

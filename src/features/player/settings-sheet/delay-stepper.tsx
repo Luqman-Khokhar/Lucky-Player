@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { IconButton } from '@/components/ui/icon-button';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { DELAY_STEP_MS, clampDelay, formatDelay } from '../player-options';
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   reset: {
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.one,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.sm,
   },
   controls: {
     flexDirection: 'row',

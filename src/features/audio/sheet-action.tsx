@@ -38,7 +38,7 @@ export function SheetAction({ icon, label, hint, onPress, destructive = false, s
           </ThemedText>
         ) : null}
       </View>
-      {selected ? <Icon name="check" size={20} color={theme.accent} /> : null}
+      {selected ? <Icon name="check" size={20} color={theme.accentText} /> : null}
     </Pressable>
   );
 }

@@ -1,20 +1,50 @@
 import { Pressable, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+
+import { Icon, type IconName } from './icon';
 
 export type ButtonProps = {
   label: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  icon?: IconName;
   disabled?: boolean;
   accessibilityHint?: string;
 };
 
-export function Button({ label, onPress, variant = 'primary', disabled = false, accessibilityHint }: ButtonProps) {
+export function Button({
+  label,
+  onPress,
+  variant = 'primary',
+  icon,
+  disabled = false,
+  accessibilityHint,
+}: ButtonProps) {
   const theme = useTheme();
-  const primary = variant === 'primary';
+
+  const background = {
+    primary: theme.accent,
+    secondary: theme.backgroundElement,
+    ghost: 'transparent',
+    danger: theme.dangerSoft,
+  }[variant];
+
+  const foreground = {
+    primary: theme.onAccent,
+    secondary: theme.text,
+    ghost: theme.accentText,
+    danger: theme.danger,
+  }[variant];
+
+  const border = {
+    primary: 'transparent',
+    secondary: theme.border,
+    ghost: theme.border,
+    danger: 'transparent',
+  }[variant];
 
   return (
     <Pressable
@@ -26,11 +56,12 @@ export function Button({ label, onPress, variant = 'primary', disabled = false, 
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        { backgroundColor: primary ? theme.accent : theme.backgroundElement },
+        { backgroundColor: background, borderColor: border },
         pressed && styles.pressed,
         disabled && styles.disabled,
       ]}>
-      <ThemedText type="smallBold" style={{ color: primary ? theme.onAccent : theme.text }}>
+      {icon ? <Icon name={icon} size={18} color={foreground} /> : null}
+      <ThemedText type="smallBold" numberOfLines={1} style={{ color: foreground }}>
         {label}
       </ThemedText>
     </Pressable>
@@ -40,16 +71,19 @@ export function Button({ label, onPress, variant = 'primary', disabled = false, 
 const styles = StyleSheet.create({
   base: {
     minHeight: 48,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.three,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.two,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   pressed: {
-    opacity: 0.8,
+    opacity: 0.75,
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
 });

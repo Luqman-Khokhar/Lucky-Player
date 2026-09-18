@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 /** Last row of the folder list: points to Settings for folders Android does not index. */
@@ -16,10 +16,10 @@ export function AddFolderFooter({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundElement }]}>
       <View style={[styles.iconWrap, { backgroundColor: theme.backgroundElement }]}>
-        <Icon name="create_new_folder" size={24} color={theme.accent} />
+        <Icon name="create_new_folder" size={24} color={theme.accentText} />
       </View>
       <View style={styles.text}>
-        <ThemedText type="smallBold" style={{ color: theme.accent }}>
+        <ThemedText type="smallBold" style={{ color: theme.accentText }}>
           Missing a folder?
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
   },
   iconWrap: {
     width: 48,

@@ -5,7 +5,7 @@ import { ThemedText } from '@/components/themed-text';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Button } from '@/components/ui/button';
 import { StateView } from '@/components/ui/state-view';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { addToPlaylist, createPlaylist, listPlaylists, playlistsContaining, type LibraryTrack } from '@/db';
 import { useLibraryQuery } from '@/features/library/use-library-query';
 import { useTheme } from '@/hooks/use-theme';
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.sm,
   },
   list: {
     maxHeight: 320,

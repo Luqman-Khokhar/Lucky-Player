@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import type { LibraryFolder } from '@/db';
 import { useTheme } from '@/hooks/use-theme';
 import { formatBytes, formatCount } from '@/utils/format';
@@ -27,7 +27,7 @@ export const FolderRow = memo(function FolderRow({ folder, onPress }: FolderRowP
       accessibilityLabel={`${folder.name}, ${count}`}
       accessibilityHint="Opens the folder"
       onPress={() => onPress(folder)}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundElement }]}>
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.accentSoft }]}>
       <VideoThumbnail
         uri={folder.coverUri}
         thumbnailKey={folder.coverKey}
@@ -36,16 +36,16 @@ export const FolderRow = memo(function FolderRow({ folder, onPress }: FolderRowP
       />
       <View style={styles.text}>
         <View style={styles.titleRow}>
-          <Icon name="folder" size={18} color={theme.accent} />
-          <ThemedText type="small" numberOfLines={1} style={styles.name}>
+          <Icon name="folder" size={18} color={theme.accentText} />
+          <ThemedText numberOfLines={1} style={styles.name}>
             {folder.name}
           </ThemedText>
         </View>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
           {`${count} · ${formatBytes(folder.totalSize)}`}
         </ThemedText>
         {path ? (
-          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+          <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
             {path}
           </ThemedText>
         ) : null}
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
   },
   text: {
     flex: 1,
@@ -75,6 +75,9 @@ const styles = StyleSheet.create({
   },
   name: {
     flex: 1,
-    fontWeight: 600,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: 700,
+    letterSpacing: -0.2,
   },
 });

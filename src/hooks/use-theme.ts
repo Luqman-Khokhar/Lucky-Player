@@ -3,12 +3,17 @@
  * https://docs.expo.dev/guides/color-schemes/
  */
 
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useMemo } from 'react';
 
-export function useTheme() {
-  const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
+import { resolvePalette, type Palette } from '@/constants/theme';
+import { useAppScheme } from '@/hooks/use-app-scheme';
+import { useAppSelector } from '@/store';
 
-  return Colors[theme];
+/** The palette the app is drawing with: the chosen theme, in the current mode, under the chosen accent. */
+export function useTheme(): Palette {
+  const mode = useAppScheme();
+  const theme = useAppSelector((state) => state.settings.theme);
+  const accent = useAppSelector((state) => state.settings.accent);
+
+  return useMemo(() => resolvePalette(theme, mode, accent), [theme, mode, accent]);
 }

@@ -98,7 +98,7 @@ function FolderSourceRow({ source, onRemove }: { source: FolderSource; onRemove:
 
   return (
     <View style={styles.row}>
-      <Icon name={source.lastError ? 'warning' : 'folder'} size={22} color={source.lastError ? theme.danger : theme.accent} />
+      <Icon name={source.lastError ? 'warning' : 'folder'} size={22} color={source.lastError ? theme.danger : theme.accentText} />
       <View style={styles.rowText}>
         <ThemedText type="small" numberOfLines={1} style={styles.rowName}>
           {source.name}

@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { IconButton } from '@/components/ui/icon-button';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { formatTime } from '@/features/player/format-time';
 import { useTheme } from '@/hooks/use-theme';
 import type { AudioQueueEntry } from '@modules/vlc-player';
@@ -35,7 +35,7 @@ export const QueueRow = memo(function QueueRow({
   const theme = useTheme();
 
   return (
-    <View style={[styles.row, playing && { backgroundColor: theme.backgroundElement }]}>
+    <View style={[styles.row, playing && { backgroundColor: theme.accentSoft }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ selected: playing }}
@@ -45,7 +45,7 @@ export const QueueRow = memo(function QueueRow({
         style={({ pressed }) => [styles.main, pressed && { backgroundColor: theme.backgroundSelected }]}>
         <View style={styles.marker}>
           {playing ? (
-            <Icon name="equalizer" size={18} color={theme.accent} />
+            <Icon name="equalizer" size={18} color={theme.accentText} />
           ) : (
             <ThemedText type="small" themeColor="textSecondary" style={styles.position}>
               {entry.index + 1}
@@ -56,7 +56,7 @@ export const QueueRow = memo(function QueueRow({
           <ThemedText
             type="small"
             numberOfLines={1}
-            style={[styles.title, playing && { color: theme.accent }]}>
+            style={[styles.title, playing && { color: theme.accentText }]}>
             {entry.title}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
   },
   marker: {
     width: 28,

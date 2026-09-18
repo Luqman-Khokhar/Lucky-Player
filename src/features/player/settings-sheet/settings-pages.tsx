@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { ASPECT_OPTIONS, DECODER_OPTIONS, SPEED_OPTIONS, trackOptions } from '../player-options';
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingHorizontal: Spacing.three,
     marginBottom: Spacing.two,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
   },
   note: {
     paddingHorizontal: Spacing.three,

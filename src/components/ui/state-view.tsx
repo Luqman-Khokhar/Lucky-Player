@@ -1,7 +1,7 @@
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { Button } from './button';
@@ -27,11 +27,13 @@ export function StateView({ title, message, icon, loading = false, action, secon
       {loading ? (
         <ActivityIndicator size="large" color={theme.accent} />
       ) : icon ? (
-        <View style={[styles.iconWrap, { backgroundColor: theme.backgroundElement }]}>
-          <Icon name={icon} size={36} color={theme.textSecondary} />
+        <View style={[styles.iconWrap, { backgroundColor: theme.accentSoft }]}>
+          <Icon name={icon} size={36} color={theme.accentText} />
         </View>
       ) : null}
-      <ThemedText style={styles.title}>{title}</ThemedText>
+      <ThemedText type="default" style={styles.title}>
+        {title}
+      </ThemedText>
       {message ? (
         <ThemedText type="small" themeColor="textSecondary" style={styles.message}>
           {message}
@@ -58,15 +60,18 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
   },
   iconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 80,
+    height: 80,
+    borderRadius: Radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.two,
   },
   title: {
-    fontWeight: 600,
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: 700,
+    letterSpacing: -0.3,
     textAlign: 'center',
   },
   message: {

@@ -48,15 +48,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
-    paddingBottom: Spacing.two,
+    paddingBottom: Spacing.three,
   },
   titles: {
     flex: 1,
     paddingHorizontal: Spacing.one,
   },
   title: {
-    fontSize: 28,
-    lineHeight: 36,
+    fontSize: 30,
+    lineHeight: 38,
+    letterSpacing: -0.8,
   },
   actions: {
     flexDirection: 'row',

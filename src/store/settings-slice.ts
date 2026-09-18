@@ -1,9 +1,13 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
+import { DEFAULT_THEME, Themes, resolveAccent, type ThemeName } from '@/constants/theme';
 import type { AspectMode, HwDecodingMode } from '@modules/vlc-player';
 
 /** Player skip buttons have matching icons only for these steps. */
 export const SEEK_STEP_CHOICES = [5, 10, 30] as const;
+
+export const THEME_MODE_CHOICES = ['system', 'light', 'dark'] as const;
+export type ThemeMode = (typeof THEME_MODE_CHOICES)[number];
 
 export const SUBTITLE_SIZE_CHOICES = ['small', 'normal', 'large', 'huge'] as const;
 export const SUBTITLE_COLOR_CHOICES = ['white', 'yellow'] as const;
@@ -22,6 +26,12 @@ export type SettingsState = {
   subtitleSize: SubtitleSize;
   subtitleColor: SubtitleColor;
   subtitleBackground: boolean;
+  /** Which full palette the app draws with. See `Themes`. */
+  theme: ThemeName;
+  /** Which of the theme's accents to lay over it. Themes carry their own sets. */
+  accent: string;
+  /** Follow the phone's light or dark setting, or override it. */
+  themeMode: ThemeMode;
 };
 
 const initialState: SettingsState = {
@@ -35,6 +45,9 @@ const initialState: SettingsState = {
   subtitleSize: 'normal',
   subtitleColor: 'white',
   subtitleBackground: false,
+  theme: DEFAULT_THEME,
+  accent: Themes[DEFAULT_THEME].defaultAccent,
+  themeMode: 'system',
 };
 
 const settingsSlice = createSlice({
@@ -74,6 +87,17 @@ const settingsSlice = createSlice({
     setSubtitleBackground(state, action: PayloadAction<boolean>) {
       state.subtitleBackground = action.payload;
     },
+    setTheme(state, action: PayloadAction<ThemeName>) {
+      state.theme = action.payload;
+      // Accents belong to a theme, so keep the current one only when the new theme also carries it.
+      state.accent = resolveAccent(action.payload, state.accent);
+    },
+    setAccent(state, action: PayloadAction<string>) {
+      state.accent = action.payload;
+    },
+    setThemeMode(state, action: PayloadAction<ThemeMode>) {
+      state.themeMode = action.payload;
+    },
   },
 });
 
@@ -89,5 +113,8 @@ export const {
   setSubtitleSize,
   setSubtitleColor,
   setSubtitleBackground,
+  setTheme,
+  setAccent,
+  setThemeMode,
 } = settingsSlice.actions;
 export default settingsSlice.reducer;

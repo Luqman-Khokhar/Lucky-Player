@@ -1,8 +1,8 @@
 import { Spacing } from '@/constants/theme';
 import { useAppSelector } from '@/store';
 
-/** Height of the mini-player bar: 40px art plus its padding. */
-const MINI_PLAYER_HEIGHT = 40 + Spacing.one * 2 + 2;
+/** Height of the floating mini-player: 44px art, its padding, the progress line and the gap below it. */
+const MINI_PLAYER_HEIGHT = 44 + Spacing.two * 2 + 3 + Spacing.two;
 
 /** Bottom padding a scrolling list needs so its last row is not hidden behind the mini-player. */
 export function useMiniPlayerInset(): number {

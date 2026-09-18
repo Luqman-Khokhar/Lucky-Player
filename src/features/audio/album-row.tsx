@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import type { LibraryAlbum } from '@/db';
 import { formatTime } from '@/features/player/format-time';
 import { useTheme } from '@/hooks/use-theme';
@@ -26,13 +26,13 @@ export const AlbumRow = memo(function AlbumRow({ album, onPress }: AlbumRowProps
       accessibilityLabel={`${album.name}, ${album.artist || 'unknown artist'}, ${count}`}
       accessibilityHint="Opens the album"
       onPress={() => onPress(album)}
-      style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.backgroundElement }]}>
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.accentSoft }]}>
       <AlbumArt uri={album.coverUri} artKey={album.coverKey} width={ROW_ART_WIDTH} icon="album" />
       <View style={styles.text}>
-        <ThemedText type="small" numberOfLines={1} style={styles.name}>
+        <ThemedText numberOfLines={1} style={styles.name}>
           {album.name}
         </ThemedText>
-        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+        <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
           {`${album.artist || 'Unknown artist'} · ${count} · ${formatTime(album.totalDuration)}`}
         </ThemedText>
       </View>
@@ -48,13 +48,16 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
   },
   text: {
     flex: 1,
     gap: Spacing.half,
   },
   name: {
-    fontWeight: 600,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: 700,
+    letterSpacing: -0.2,
   },
 });

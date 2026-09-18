@@ -7,14 +7,14 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { IconButton } from '@/components/ui/icon-button';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { BottomTabInset, Elevation, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAppSelector } from '@/store';
 import VlcPlayer from '@modules/vlc-player';
 
 import { AlbumArt } from './album-art';
 
-const ART_WIDTH = 40;
+const ART_WIDTH = 44;
 
 /** Upward travel that counts as "open the player". */
 const SWIPE_DISTANCE = 24;
@@ -55,7 +55,12 @@ export function MiniPlayer() {
 
   return (
     <GestureDetector gesture={swipeUp}>
-      <View style={[styles.bar, { backgroundColor: theme.backgroundElement }]}>
+      <View
+        style={[
+          styles.bar,
+          Elevation.medium,
+          { backgroundColor: theme.backgroundElement, borderColor: theme.border, shadowColor: theme.shadow },
+        ]}>
         <View style={[styles.progressTrack, { backgroundColor: theme.backgroundSelected }]}>
           <View style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: theme.accent }]} />
         </View>
@@ -67,10 +72,10 @@ export function MiniPlayer() {
           style={({ pressed }) => [styles.content, pressed && { backgroundColor: theme.backgroundSelected }]}>
           <AlbumArt uri={audio.uri} artKey={audio.artKey ?? audio.uri} width={ART_WIDTH} />
           <View style={styles.text}>
-            <ThemedText type="small" numberOfLines={1} style={styles.title}>
+            <ThemedText numberOfLines={1} style={styles.title}>
               {audio.title ?? ''}
             </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+            <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
               {audio.artist || 'Unknown artist'}
             </ThemedText>
           </View>
@@ -78,8 +83,9 @@ export function MiniPlayer() {
           <IconButton
             icon={audio.playing ? 'pause' : 'play_arrow'}
             label={audio.playing ? 'Pause' : 'Play'}
-            color={theme.text}
-            pressedColor={theme.backgroundSelected}
+            color={theme.onAccent}
+            backgroundColor={theme.accent}
+            pressedColor={theme.accent}
             onPress={() => VlcPlayer.audioToggle().catch(warn('toggle'))}
           />
           <IconButton
@@ -98,12 +104,15 @@ export function MiniPlayer() {
 const styles = StyleSheet.create({
   bar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: BottomTabInset,
+    left: Spacing.two,
+    right: Spacing.two,
+    bottom: BottomTabInset + Spacing.two,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
   progressTrack: {
-    height: 2,
+    height: 3,
   },
   progressFill: {
     height: '100%',
@@ -112,7 +121,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingVertical: Spacing.one,
+    paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.two,
   },
   text: {
@@ -120,6 +129,9 @@ const styles = StyleSheet.create({
     gap: Spacing.half,
   },
   title: {
-    fontWeight: 600,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: 700,
+    letterSpacing: -0.2,
   },
 });

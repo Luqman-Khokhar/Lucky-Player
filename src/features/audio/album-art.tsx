@@ -3,7 +3,7 @@ import { PixelRatio, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useThumbnail } from '@/features/library/use-thumbnail';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -56,7 +56,7 @@ export function AlbumArt({ uri, artKey, width, icon = 'music_note', badge }: Alb
 const styles = StyleSheet.create({
   frame: {
     aspectRatio: 1,
-    borderRadius: Spacing.two,
+    borderRadius: Radius.md,
     overflow: 'hidden',
   },
   placeholder: {
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     top: Spacing.one,
     left: Spacing.one,
     paddingHorizontal: Spacing.one,
-    borderRadius: Spacing.one,
+    borderRadius: Radius.xs,
   },
   badgeText: {
     fontSize: 12,

@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { IconButton } from '@/components/ui/icon-button';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import type { LibraryTrack } from '@/db';
 import { formatTime } from '@/features/player/format-time';
 import { useTheme } from '@/hooks/use-theme';
@@ -43,7 +43,7 @@ export const TrackRow = memo(function TrackRow({
         accessibilityLabel={`${track.title}, ${track.artist || 'unknown artist'}, ${formatTime(track.duration)}`}
         accessibilityHint={track.position > 0 ? 'Resumes playback' : 'Plays the track'}
         onPress={() => onPress(track)}
-        style={({ pressed }) => [styles.main, pressed && { backgroundColor: theme.backgroundElement }]}>
+        style={({ pressed }) => [styles.main, pressed && { backgroundColor: theme.accentSoft }]}>
         {showTrackNumber ? (
           <View style={styles.number}>
             <ThemedText type="small" themeColor="textSecondary" style={styles.numberText}>
@@ -54,14 +54,14 @@ export const TrackRow = memo(function TrackRow({
           <AlbumArt uri={track.uri} artKey={track.artKey} width={ROW_ART_WIDTH} />
         )}
         <View style={styles.text}>
-          <ThemedText type="small" numberOfLines={1} style={styles.title}>
+          <ThemedText numberOfLines={1} style={styles.title}>
             {track.title}
           </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+          <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
             {second}
           </ThemedText>
         </View>
-        <ThemedText type="small" themeColor="textSecondary" style={styles.duration}>
+        <ThemedText type="caption" themeColor="textTertiary" style={styles.duration}>
           {formatTime(track.duration)}
         </ThemedText>
       </Pressable>
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.three,
+    borderRadius: Radius.md,
   },
   number: {
     width: ROW_ART_WIDTH / 2,
@@ -116,7 +116,10 @@ const styles = StyleSheet.create({
     gap: Spacing.half,
   },
   title: {
-    fontWeight: 600,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: 700,
+    letterSpacing: -0.2,
   },
   duration: {
     fontVariant: ['tabular-nums'],
