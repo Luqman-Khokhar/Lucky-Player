@@ -179,10 +179,12 @@ export type AudioQueueItem = {
   title: string;
   artist: string;
   album: string;
-  /** Cache key for the album art, from `artKeyFor`. */
+  /** Cache key for the album art, from `artKeyFor`. Empty falls back to a key derived from the uri. */
   artKey: string;
   /** Milliseconds; 0 when unknown. */
   duration: number;
+  /** False for a video played as audio, whose picture is a frame rather than embedded art. */
+  artwork?: boolean;
 };
 
 /** A queue entry as the queue screen sees it, in play order. */

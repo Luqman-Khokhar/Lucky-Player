@@ -78,6 +78,25 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
   const getProgress = useCallback(() => progressRef.current, [progressRef]);
   const togglePlay = useCallback(() => setPaused((value) => !value), []);
 
+  /**
+   * Puts the video back at `positionMs` and plays it, reopening the media rather than seeking the existing one:
+   * libVLC does not recover its video output after the surface is destroyed and recreated, so a plain seek comes
+   * back as sound over a black picture.
+   */
+  const resumeAt = useCallback(
+    (positionMs: number) => {
+      const { duration } = progressRef.current;
+      reportProgress(positionMs, duration);
+      setProgress({ position: positionMs, duration });
+      setPaused(false);
+      setError(null);
+      setPlaybackState('opening');
+      restartFromCurrent();
+      setAttempt((value) => value + 1);
+    },
+    [progressRef, reportProgress, restartFromCurrent]
+  );
+
   const retry = useCallback(() => {
     restartFromCurrent();
     setError(null);
@@ -236,6 +255,7 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     seekTo,
     skip,
     togglePlay,
+    resumeAt,
     retry,
     settingsActions,
     pictureInPicture: {

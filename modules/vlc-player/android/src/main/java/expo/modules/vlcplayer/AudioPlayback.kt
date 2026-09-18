@@ -25,7 +25,9 @@ internal data class AudioItem(
   val artist: String,
   val album: String,
   val artKey: String,
-  val durationMs: Long
+  val durationMs: Long,
+  /** True for music, where the picture is embedded art; false for a video, where it is a frame. */
+  val artwork: Boolean
 )
 
 /**
@@ -184,6 +186,7 @@ object AudioPlayback {
       "album" to item.album,
       "artKey" to item.artKey,
       "duration" to item.durationMs,
+      "artwork" to item.artwork,
       "index" to index
     )
   }
@@ -482,7 +485,8 @@ object AudioPlayback {
         artist = item.optString("artist", ""),
         album = item.optString("album", ""),
         artKey = item.optString("artKey", ""),
-        durationMs = item.optLong("duration", 0)
+        durationMs = item.optLong("duration", 0),
+        artwork = item.optBoolean("artwork", true)
       )
     }
   } catch (e: Exception) {
@@ -533,7 +537,8 @@ object AudioPlayback {
     artBitmapKey = item.artKey
     val gen = generation
     worker.execute {
-      val path = ThumbnailCache.get(context, item.uri, item.artKey.ifEmpty { item.uri.hashCode().toString() }, ART_WIDTH, artwork = true)
+      val key = item.artKey.ifEmpty { "q${item.uri.hashCode()}" }
+      val path = ThumbnailCache.get(context, item.uri, key, ART_WIDTH, artwork = item.artwork)
       val bitmap = path?.let { BitmapFactory.decodeFile(Uri.parse(it).path) }
       mainHandler.post {
         if (gen != generation || artBitmapKey != item.artKey) {

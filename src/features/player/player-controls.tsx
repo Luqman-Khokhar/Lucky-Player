@@ -33,6 +33,9 @@ export type PlayerControlsProps = {
   hasNext: boolean;
   rotationLocked: boolean;
   pictureInPictureSupported: boolean;
+  /** Whether the sound keeps playing once the app leaves the screen. */
+  backgroundAudio: boolean;
+  onToggleBackgroundAudio: () => void;
   onPictureInPicture: () => void;
   onCast: () => void;
   onBack: () => void;
@@ -111,6 +114,17 @@ export function PlayerControls(props: PlayerControlsProps) {
                 </ThemedText>
               ) : null}
             </View>
+            <IconButton
+              icon={props.backgroundAudio ? 'headset' : 'headset_off'}
+              label={
+                props.backgroundAudio
+                  ? 'Keep playing the sound in the background. Tap to turn off'
+                  : 'Sound stops when you leave. Tap to keep playing in the background'
+              }
+              color={props.backgroundAudio ? theme.playerAccent : theme.playerText}
+              pressedColor={theme.playerPressed}
+              onPress={withInteraction(props.onToggleBackgroundAudio)}
+            />
             <IconButton icon="cast" label="Cast to a laptop" {...colors} onPress={props.onCast} />
             {props.pictureInPictureSupported ? (
               <IconButton
