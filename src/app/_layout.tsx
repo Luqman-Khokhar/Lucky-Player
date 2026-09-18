@@ -2,20 +2,20 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
-import { useEffect, type PropsWithChildren } from 'react';
+import { useEffect, useMemo, type PropsWithChildren } from 'react';
 import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import { Colors } from '@/constants/theme';
+
 import { initDatabase } from '@/db';
 import { AudioPlaybackSync } from '@/features/audio/audio-playback-sync';
 import { MiniPlayer } from '@/features/audio/mini-player';
 import { CastSync } from '@/features/cast/cast-sync';
 import { SubtitleStyleSync } from '@/features/player/subtitle-style-sync';
 import { SoundEffectsSync } from '@/features/sound/sound-effects-sync';
-import { useAppScheme } from '@/hooks/use-app-scheme';
+import { useTheme } from '@/hooks/use-theme';
 import { store } from '@/store';
 import { hydrateSettings, persistSettingsChanges } from '@/store/settings-persistence';
 import { hydrateSound } from '@/store/sound-persistence';
@@ -23,50 +23,52 @@ import VlcPlayer from '@modules/vlc-player';
 
 SplashScreen.preventAutoHideAsync();
 
-/** Navigation's own surfaces (screen background, card, borders) drawn from the app's tokens. */
-const navigationThemes = {
-  light: {
-    ...DefaultTheme,
-    colors: {
-      ...DefaultTheme.colors,
-      primary: Colors.light.accent,
-      background: Colors.light.background,
-      card: Colors.light.background,
-      text: Colors.light.text,
-      border: Colors.light.border,
-    },
-  },
-  dark: {
-    ...DarkTheme,
-    colors: {
-      ...DarkTheme.colors,
-      primary: Colors.dark.accent,
-      background: Colors.dark.background,
-      card: Colors.dark.background,
-      text: Colors.dark.text,
-      border: Colors.dark.border,
-    },
-  },
-};
+/**
+ * Whether a background is dark enough to need light status-bar icons. Themes do not label themselves
+ * light or dark - a single palette such as Neon is only ever drawn dark - so this reads the colour.
+ */
+function isDark(hex: string): boolean {
+  const value = hex.replace('#', '');
+  const red = parseInt(value.slice(0, 2), 16);
+  const green = parseInt(value.slice(2, 4), 16);
+  const blue = parseInt(value.slice(4, 6), 16);
+  return (red * 299 + green * 587 + blue * 114) / 1000 < 128;
+}
 
 /**
- * Reads the theme the user settled on, which lives in the store, so it has to sit inside the Provider
- * rather than in `RootLayout` itself.
+ * Reads the palette the user settled on, which lives in the store, so it has to sit inside the Provider
+ * rather than in `RootLayout` itself. Navigation's own surfaces - the screen background it paints
+ * between screens, its card and its borders - are drawn from the same palette.
  */
 function AppTheme({ children }: PropsWithChildren) {
-  const scheme = useAppScheme();
-  const background = scheme === 'dark' ? Colors.dark.background : Colors.light.background;
+  const theme = useTheme();
+  const dark = isDark(theme.background);
+
+  const navigationTheme = useMemo(() => {
+    const base = dark ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: theme.accent,
+        background: theme.background,
+        card: theme.background,
+        text: theme.text,
+        border: theme.border,
+      },
+    };
+  }, [dark, theme.accent, theme.background, theme.border, theme.text]);
 
   // The window behind React shows through during screen transitions, so it has to follow the theme too.
   useEffect(() => {
-    SystemUI.setBackgroundColorAsync(background).catch((error: unknown) =>
+    SystemUI.setBackgroundColorAsync(theme.background).catch((error: unknown) =>
       console.warn('[theme] window background failed', error)
     );
-  }, [background]);
+  }, [theme.background]);
 
   return (
-    <ThemeProvider value={scheme === 'dark' ? navigationThemes.dark : navigationThemes.light}>
-      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+    <ThemeProvider value={navigationTheme}>
+      <StatusBar style={dark ? 'light' : 'dark'} />
       {children}
     </ThemeProvider>
   );

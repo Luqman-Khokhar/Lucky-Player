@@ -5,14 +5,15 @@
 
 import { useMemo } from 'react';
 
-import { Accents, Colors } from '@/constants/theme';
+import { resolvePalette, type Palette } from '@/constants/theme';
 import { useAppScheme } from '@/hooks/use-app-scheme';
 import { useAppSelector } from '@/store';
 
-/** The palette for the current theme, with the accent the user picked in Appearance laid over it. */
-export function useTheme() {
-  const theme = useAppScheme();
+/** The palette the app is drawing with: the chosen theme, in the current mode, under the chosen accent. */
+export function useTheme(): Palette {
+  const mode = useAppScheme();
+  const theme = useAppSelector((state) => state.settings.theme);
   const accent = useAppSelector((state) => state.settings.accent);
 
-  return useMemo(() => ({ ...Colors[theme], ...Accents[accent][theme] }), [theme, accent]);
+  return useMemo(() => resolvePalette(theme, mode, accent), [theme, mode, accent]);
 }

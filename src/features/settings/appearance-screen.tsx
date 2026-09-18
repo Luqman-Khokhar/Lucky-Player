@@ -7,15 +7,24 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { SegmentedControl, type Segment } from '@/components/ui/segmented-control';
-import { Accents, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
+import {
+  MaxContentWidth,
+  Radius,
+  Spacing,
+  Themes,
+  accentLabel,
+  resolveAccent,
+  themeModes,
+} from '@/constants/theme';
 import { useAppScheme } from '@/hooks/use-app-scheme';
 import { useGoBack } from '@/hooks/use-go-back';
 import { useTheme } from '@/hooks/use-theme';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { setAccent, setThemeMode, type ThemeMode } from '@/store/settings-slice';
+import { setAccent, setTheme, setThemeMode, type ThemeMode } from '@/store/settings-slice';
 
 import { AccentSwatches } from './accent-swatches';
 import { SettingsSection } from './settings-section';
+import { ThemeCards } from './theme-cards';
 
 const THEME_SEGMENTS: Segment<ThemeMode>[] = [
   { key: 'system', label: 'System' },
@@ -28,9 +37,14 @@ export function AppearanceScreen() {
   const insets = useSafeAreaInsets();
   const goBack = useGoBack();
   const dispatch = useAppDispatch();
+  const themeName = useAppSelector((state) => state.settings.theme);
   const accent = useAppSelector((state) => state.settings.accent);
   const themeMode = useAppSelector((state) => state.settings.themeMode);
-  const scheme = useAppScheme();
+  const mode = useAppScheme();
+
+  const definition = Themes[themeName];
+  const darkOnly = !themeModes(themeName).includes('light');
+  const currentAccent = resolveAccent(themeName, accent);
 
   return (
     <ThemedView style={styles.root}>
@@ -38,25 +52,42 @@ export function AppearanceScreen() {
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}>
         <View style={styles.column}>
           <SettingsSection title="Theme">
-            <ThemedText type="small" themeColor="textSecondary">
-              System follows the light and dark setting on your phone. Pick Light or Dark to keep the app on
-              one of them whatever the phone does.
-            </ThemedText>
-            <SegmentedControl
-              flush
-              options={THEME_SEGMENTS}
-              value={themeMode}
-              onChange={(mode) => dispatch(setThemeMode(mode))}
-              label="Theme"
-            />
+            <ThemeCards value={themeName} onChange={(name) => dispatch(setTheme(name))} />
+          </SettingsSection>
+
+          <SettingsSection title="Light and dark">
+            {darkOnly ? (
+              <ThemedText type="small" themeColor="textSecondary" accessibilityLiveRegion="polite">
+                {definition.label} is a dark theme only, so this is fixed while it is in use. Pick another
+                theme to choose again.
+              </ThemedText>
+            ) : (
+              <>
+                <ThemedText type="small" themeColor="textSecondary">
+                  System follows the light and dark setting on your phone. Pick Light or Dark to keep the app
+                  on one of them whatever the phone does.
+                </ThemedText>
+                <SegmentedControl
+                  flush
+                  options={THEME_SEGMENTS}
+                  value={themeMode}
+                  onChange={(next) => dispatch(setThemeMode(next))}
+                  label="Light and dark"
+                />
+              </>
+            )}
           </SettingsSection>
 
           <SettingsSection title="Accent color">
             <ThemedText type="small" themeColor="textSecondary">
-              Colors buttons, highlights and the playback bars. Light and dark each use their own shade of
-              the color you pick, and the choice is saved with the rest of your settings.
+              Colors buttons, highlights and the playback bars. Each theme carries the accents that suit it,
+              so this list changes with the theme above.
             </ThemedText>
-            <AccentSwatches value={accent} onChange={(name) => dispatch(setAccent(name))} />
+            <AccentSwatches
+              theme={themeName}
+              value={currentAccent}
+              onChange={(name) => dispatch(setAccent(name))}
+            />
           </SettingsSection>
 
           <SettingsSection title="Preview">
@@ -66,7 +97,7 @@ export function AppearanceScreen() {
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants">
               <View style={styles.previewRow}>
-                <Chip label={Accents[accent].label} selected onPress={() => {}} />
+                <Chip label={accentLabel(themeName, currentAccent)} selected onPress={() => {}} />
                 <Chip label="Not selected" selected={false} onPress={() => {}} />
               </View>
               <View style={[styles.track, { backgroundColor: theme.backgroundSelected }]}>
@@ -78,11 +109,7 @@ export function AppearanceScreen() {
               </View>
             </View>
             <ThemedText type="caption" themeColor="textTertiary" accessibilityLiveRegion="polite">
-              {themeMode === 'system'
-                ? scheme === 'dark'
-                  ? 'Showing the dark shades, because your phone is set to dark.'
-                  : 'Showing the light shades, because your phone is set to light.'
-                : `Showing the ${scheme} shades, because the theme is set to ${scheme}.`}
+              {`${definition.label}, ${mode} shades.`}
             </ThemedText>
           </SettingsSection>
         </View>

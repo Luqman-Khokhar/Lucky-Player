@@ -2,36 +2,37 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { Accents, ACCENT_CHOICES, Radius, Spacing, type AccentName } from '@/constants/theme';
+import { accentsFor, Radius, Spacing, type ThemeName } from '@/constants/theme';
 import { useAppScheme } from '@/hooks/use-app-scheme';
 import { useTheme } from '@/hooks/use-theme';
 
 const SWATCH_SIZE = 56;
 
 type AccentSwatchesProps = {
-  value: AccentName;
-  onChange: (name: AccentName) => void;
+  /** The theme whose accents to show. Each theme carries its own set. */
+  theme: ThemeName;
+  value: string;
+  onChange: (name: string) => void;
 };
 
 /** One filled circle per accent. The chosen one carries a check and a ring drawn in its own color. */
-export function AccentSwatches({ value, onChange }: AccentSwatchesProps) {
+export function AccentSwatches({ theme: themeName, value, onChange }: AccentSwatchesProps) {
   const theme = useTheme();
-  const variant = useAppScheme();
+  const mode = useAppScheme();
 
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel="Accent color" style={styles.grid}>
-      {ACCENT_CHOICES.map((name) => {
-        const option = Accents[name];
-        const colors = option[variant];
-        const selected = name === value;
+      {accentsFor(themeName).map((option) => {
+        const colors = option[mode];
+        const selected = option.key === value;
 
         return (
           <Pressable
-            key={name}
+            key={option.key}
             accessibilityRole="radio"
             accessibilityState={{ checked: selected }}
             accessibilityLabel={option.label}
-            onPress={() => onChange(name)}
+            onPress={() => onChange(option.key)}
             style={({ pressed }) => [styles.item, pressed && styles.pressed]}>
             <View
               style={[
