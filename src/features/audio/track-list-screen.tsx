@@ -20,6 +20,7 @@ import { formatCount } from '@/utils/format';
 
 import { TrackRow } from './track-row';
 import { useAudioActions } from './use-audio-actions';
+import { useMiniPlayerInset } from './use-mini-player-inset';
 
 const SEARCH_DEBOUNCE_MS = 200;
 
@@ -54,6 +55,7 @@ export function TrackListScreen({
   const { playTrack, toggleFavorite } = useAudioActions();
   const scanning = useAppSelector((state) => state.library.scanStatus === 'scanning');
   const { rescan } = useLibraryActions();
+  const miniPlayerInset = useMiniPlayerInset();
   const [search, setSearch] = useState('');
   const term = useDebouncedValue(search.trim(), SEARCH_DEBOUNCE_MS);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -131,7 +133,7 @@ export function TrackListScreen({
         refreshing={scanning}
         onRefresh={rescan}
         keyboardDismissMode="on-drag"
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: styles.list.paddingBottom + miniPlayerInset }]}
       />
     );
   };

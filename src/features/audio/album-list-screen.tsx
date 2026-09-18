@@ -17,6 +17,7 @@ import { useAppSelector } from '@/store';
 import { formatCount } from '@/utils/format';
 
 import { AlbumRow } from './album-row';
+import { useMiniPlayerInset } from './use-mini-player-inset';
 
 const ALBUM_SORTS: SortOption<AlbumSortKey>[] = [
   { key: 'name', label: 'Name', initialDirection: 'asc' },
@@ -29,6 +30,7 @@ export function AlbumListScreen({ segments }: LibrarySectionProps) {
   const router = useRouter();
   const scanning = useAppSelector((state) => state.library.scanStatus === 'scanning');
   const { rescan } = useLibraryActions();
+  const miniPlayerInset = useMiniPlayerInset();
   const [sort, setSort] = useState<AlbumSortKey>('name');
   const [direction, setDirection] = useState<SortDirection>('asc');
   const albums = useLibraryQuery(`albums:${sort}:${direction}`, () => listAlbums(sort, direction));
@@ -84,7 +86,7 @@ export function AlbumListScreen({ segments }: LibrarySectionProps) {
           renderItem={({ item }) => <AlbumRow album={item} onPress={openAlbum} />}
           refreshing={scanning}
           onRefresh={rescan}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: styles.list.paddingBottom + miniPlayerInset }]}
         />
       </>
     );

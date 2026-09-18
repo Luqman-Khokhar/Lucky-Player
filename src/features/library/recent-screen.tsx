@@ -11,6 +11,8 @@ import { listRecent, type LibraryVideo } from '@/db';
 import { formatCount } from '@/utils/format';
 
 import type { LibrarySectionProps } from './library-section';
+import { useMiniPlayerInset } from '@/features/audio/use-mini-player-inset';
+
 import { PermissionGate } from './permission-gate';
 import { useLibraryActions } from './use-library-actions';
 import { useLibraryQuery } from './use-library-query';
@@ -29,6 +31,7 @@ export function RecentScreen({ segments, onBrowseFolders }: RecentScreenProps) {
   const { toggleFavorite } = useLibraryActions();
   const recent = useLibraryQuery('recent', () => listRecent(RECENT_LIMIT));
   const playVideo = usePlayVideo();
+  const miniPlayerInset = useMiniPlayerInset();
 
   const play = useCallback((video: LibraryVideo) => playVideo(video, recent.data ?? []), [playVideo, recent.data]);
 
@@ -62,7 +65,7 @@ export function RecentScreen({ segments, onBrowseFolders }: RecentScreenProps) {
         renderItem={({ item }) => (
           <VideoRow video={item} showFolder onPress={play} onToggleFavorite={toggleFavorite} />
         )}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: styles.list.paddingBottom + miniPlayerInset }]}
       />
     );
   };

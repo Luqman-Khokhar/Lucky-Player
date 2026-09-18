@@ -17,6 +17,7 @@ import { useAppSelector } from '@/store';
 import { formatCount } from '@/utils/format';
 
 import { AudioFolderRow } from './audio-folder-row';
+import { useMiniPlayerInset } from './use-mini-player-inset';
 
 const FOLDER_SORTS: SortOption<AudioFolderSortKey>[] = [
   { key: 'name', label: 'Name', initialDirection: 'asc' },
@@ -29,6 +30,7 @@ export function AudioFoldersScreen({ segments }: LibrarySectionProps) {
   const router = useRouter();
   const scanning = useAppSelector((state) => state.library.scanStatus === 'scanning');
   const { rescan } = useLibraryActions();
+  const miniPlayerInset = useMiniPlayerInset();
   const [sort, setSort] = useState<AudioFolderSortKey>('name');
   const [direction, setDirection] = useState<SortDirection>('asc');
   const folders = useLibraryQuery(`audio-folders:${sort}:${direction}`, () => listAudioFolders(sort, direction));
@@ -81,7 +83,7 @@ export function AudioFoldersScreen({ segments }: LibrarySectionProps) {
           renderItem={({ item }) => <AudioFolderRow folder={item} onPress={openFolder} />}
           refreshing={scanning}
           onRefresh={rescan}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: styles.list.paddingBottom + miniPlayerInset }]}
         />
       </>
     );

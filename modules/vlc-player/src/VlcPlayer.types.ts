@@ -171,6 +171,43 @@ export type ScannedAudio = {
   relativePath: string;
 };
 
+export type RepeatMode = 'off' | 'all' | 'one';
+
+/** One entry of the music queue handed to the playback service. */
+export type AudioQueueItem = {
+  uri: string;
+  title: string;
+  artist: string;
+  album: string;
+  /** Cache key for the album art, from `artKeyFor`. */
+  artKey: string;
+  /** Milliseconds; 0 when unknown. */
+  duration: number;
+};
+
+export type AudioPlaybackState = {
+  /** False when nothing is loaded and the notification is gone. */
+  active: boolean;
+  playing: boolean;
+  loading: boolean;
+  uri: string | null;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  artKey: string | null;
+  positionMs: number;
+  durationMs: number;
+  /** Index into the queue as it was handed over, not the shuffled order. */
+  index: number | null;
+  queueSize: number;
+  repeat: RepeatMode;
+  shuffle: boolean;
+  rate: number;
+  /** Set only on the state that reports a failure. */
+  errorCode?: string;
+  errorMessage?: string;
+};
+
 export type PickedFolder = {
   /** Persisted SAF tree URI */
   uri: string;

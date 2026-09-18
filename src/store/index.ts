@@ -1,6 +1,7 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
 
+import audioReducer from './audio-slice';
 import castReducer from './cast-slice';
 import libraryReducer from './library-slice';
 import playQueueReducer from './play-queue-slice';
@@ -11,6 +12,7 @@ import uiReducer from './ui-slice';
 export const store = configureStore({
   reducer: {
     settings: settingsReducer,
+    audio: audioReducer,
     library: libraryReducer,
     playQueue: playQueueReducer,
     sound: soundReducer,

@@ -14,6 +14,8 @@ import { useAppSelector } from '@/store';
 import { formatCount } from '@/utils/format';
 
 import type { LibrarySectionProps } from './library-section';
+import { useMiniPlayerInset } from '@/features/audio/use-mini-player-inset';
+
 import { PermissionGate } from './permission-gate';
 import { SortChips, type SortOption } from './sort-chips';
 import { useLibraryActions } from './use-library-actions';
@@ -48,6 +50,7 @@ export function VideoListScreen({
   const playVideo = usePlayVideo();
   const scanning = useAppSelector((state) => state.library.scanStatus === 'scanning');
   const { rescan, toggleFavorite } = useLibraryActions();
+  const miniPlayerInset = useMiniPlayerInset();
   const [search, setSearch] = useState('');
   const term = useDebouncedValue(search.trim(), SEARCH_DEBOUNCE_MS);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
@@ -118,7 +121,7 @@ export function VideoListScreen({
         refreshing={scanning}
         onRefresh={rescan}
         keyboardDismissMode="on-drag"
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: styles.list.paddingBottom + miniPlayerInset }]}
       />
     );
   };

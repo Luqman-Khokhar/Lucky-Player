@@ -1,6 +1,7 @@
 import { NativeModule, requireNativeModule } from 'expo';
 
 import type {
+  AudioPlaybackState,
   CastControlAction,
   CastPlayback,
   CastState,
@@ -11,6 +12,7 @@ import type {
   PickedFolder,
   PickedSubtitle,
   PickedVideo,
+  RepeatMode,
   ScannedAudio,
   ScannedVideo,
   SoundEffectsStatus,
@@ -20,6 +22,8 @@ import type {
 type VlcPlayerModuleEvents = {
   /** A notification button changed the sound settings; `settings` is the saved settings as JSON. */
   onSoundSettingsChanged: (event: { settings: string }) => void;
+  /** Music playback changed: track, position, play state, queue, repeat or shuffle. */
+  onAudioStateChanged: (event: { state: AudioPlaybackState }) => void;
   /** Casting started or stopped, a laptop connected or left, the address or code changed. */
   onCastStateChanged: (event: { state: CastState }) => void;
   /** A laptop reported playback, a video started or stopped, or the playing laptop disconnected. */
@@ -31,6 +35,23 @@ declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
   scanVideos(): Promise<ScannedVideo[]>;
   /** Every music track MediaStore knows about. Rejects with ERR_PERMISSION without audio access. */
   scanAudio(): Promise<ScannedAudio[]>;
+
+  /** Replaces the music queue (JSON `AudioQueueItem[]`) and starts playing at `startIndex`. */
+  audioSetQueue(queueJson: string, startIndex: number, positionMs: number): Promise<void>;
+  audioPlay(): Promise<void>;
+  audioPause(): Promise<void>;
+  audioToggle(): Promise<void>;
+  audioNext(): Promise<void>;
+  audioPrevious(): Promise<void>;
+  /** Jumps to a track by its index in the queue as it was handed over. */
+  audioPlayIndex(index: number): Promise<void>;
+  audioSeek(positionMs: number): Promise<void>;
+  audioSetRepeat(mode: RepeatMode): Promise<void>;
+  audioSetShuffle(enabled: boolean): Promise<void>;
+  audioSetRate(rate: number): Promise<void>;
+  /** Stops playback, clears the queue and removes the notification. */
+  audioStop(): Promise<void>;
+  getAudioState(): Promise<AudioPlaybackState>;
   /** file:// JPEG path, or null when no frame could be read. `key` must change when the file changes. */
   getThumbnail(uri: string, key: string, width: number): Promise<string | null>;
   /** Square album art as a file:// JPEG path, or null when the track carries none. Shares the thumbnail cache. */
