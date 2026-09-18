@@ -13,18 +13,13 @@ export default function TabsLayout() {
       indicatorColor={theme.backgroundSelected}
       labelStyle={{ selected: { color: theme.text } }}>
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Folders</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon md="folder" />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="videos">
         <NativeTabs.Trigger.Label>Videos</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="video_library" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="recent">
-        <NativeTabs.Trigger.Label>Continue</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon md="history" />
+      <NativeTabs.Trigger name="music">
+        <NativeTabs.Trigger.Label>Music</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon md="music_note" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="settings">

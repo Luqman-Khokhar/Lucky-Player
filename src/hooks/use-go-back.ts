@@ -10,6 +10,6 @@ export function useGoBack() {
 
   return useCallback(() => {
     if (router.canGoBack()) router.back();
-    else router.replace('/videos');
+    else router.replace('/');
   }, [router]);
 }

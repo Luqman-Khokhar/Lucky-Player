@@ -15,6 +15,9 @@ import { formatCount, formatScanTime } from '@/utils/format';
 
 import { AddFolderFooter } from './add-folder-footer';
 import { FolderRow } from './folder-row';
+import type { LibrarySectionProps } from './library-section';
+import { useMiniPlayerInset } from '@/features/audio/use-mini-player-inset';
+
 import { PermissionGate } from './permission-gate';
 import { SortChips, type SortOption } from './sort-chips';
 import { useLibraryActions } from './use-library-actions';
@@ -28,12 +31,13 @@ const FOLDER_SORTS: SortOption<FolderSortKey>[] = [
   { key: 'size', label: 'Size', initialDirection: 'desc' },
 ];
 
-export function FoldersScreen() {
+export function FoldersScreen({ segments }: LibrarySectionProps) {
   const router = useRouter();
   const theme = useTheme();
   const { scanStatus, scanError, videoCount, lastScanAt } = useAppSelector((state) => state.library);
   const { rescan } = useLibraryActions();
   const { openFile, picking } = useOpenFile();
+  const miniPlayerInset = useMiniPlayerInset();
   const [sort, setSort] = useState<FolderSortKey>('name');
   const [direction, setDirection] = useState<SortDirection>('asc');
   const folders = useLibraryQuery(`folders:${sort}:${direction}`, () => listFolders(sort, direction));
@@ -104,7 +108,7 @@ export function FoldersScreen() {
           ListFooterComponent={<AddFolderFooter onPress={() => router.navigate('/settings')} />}
           refreshing={scanning}
           onRefresh={rescan}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: styles.list.paddingBottom + miniPlayerInset }]}
         />
       </>
     );
@@ -136,6 +140,7 @@ export function FoldersScreen() {
           </>
         }
       />
+      {segments}
       <PermissionGate>{renderBody()}</PermissionGate>
     </ThemedView>
   );

@@ -16,6 +16,8 @@ export type SettingsState = {
   seekStepSec: number;
   resumePlayback: boolean;
   autoPlayNext: boolean;
+  /** Keep a video's sound playing when the app leaves the screen, handing it to the music player. */
+  backgroundAudio: boolean;
   matchFrameRate: boolean;
   subtitleSize: SubtitleSize;
   subtitleColor: SubtitleColor;
@@ -28,6 +30,7 @@ const initialState: SettingsState = {
   seekStepSec: 10,
   resumePlayback: true,
   autoPlayNext: true,
+  backgroundAudio: false,
   matchFrameRate: true,
   subtitleSize: 'normal',
   subtitleColor: 'white',
@@ -56,6 +59,9 @@ const settingsSlice = createSlice({
     setAutoPlayNext(state, action: PayloadAction<boolean>) {
       state.autoPlayNext = action.payload;
     },
+    setBackgroundAudio(state, action: PayloadAction<boolean>) {
+      state.backgroundAudio = action.payload;
+    },
     setMatchFrameRate(state, action: PayloadAction<boolean>) {
       state.matchFrameRate = action.payload;
     },
@@ -78,6 +84,7 @@ export const {
   setSeekStep,
   setResumePlayback,
   setAutoPlayNext,
+  setBackgroundAudio,
   setMatchFrameRate,
   setSubtitleSize,
   setSubtitleColor,

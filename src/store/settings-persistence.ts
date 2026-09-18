@@ -21,6 +21,7 @@ function parseSettings(value: unknown): Partial<SettingsState> {
   }
   if (typeof input.resumePlayback === 'boolean') result.resumePlayback = input.resumePlayback;
   if (typeof input.autoPlayNext === 'boolean') result.autoPlayNext = input.autoPlayNext;
+  if (typeof input.backgroundAudio === 'boolean') result.backgroundAudio = input.backgroundAudio;
   if (typeof input.matchFrameRate === 'boolean') result.matchFrameRate = input.matchFrameRate;
   if (typeof input.subtitleBackground === 'boolean') result.subtitleBackground = input.subtitleBackground;
   const size = SUBTITLE_SIZE_CHOICES.find((choice) => choice === input.subtitleSize);

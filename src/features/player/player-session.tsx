@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { Spacing } from '@/constants/theme';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { setBackgroundAudio } from '@/store/settings-slice';
 import { useCastVideo } from '@/features/cast/use-cast-video';
 import { useTheme } from '@/hooks/use-theme';
 import { VlcPlayerView } from '@modules/vlc-player';
@@ -11,6 +13,7 @@ import { PlayerErrorPanel } from './player-error-panel';
 import { PlayerGestureLayer } from './player-gesture-layer';
 import { PlayerNotice } from './player-notice';
 import { SettingsSheet } from './settings-sheet/settings-sheet';
+import { useBackgroundAudio } from './use-background-audio';
 import { usePlayerController } from './use-player-controller';
 import type { SystemControls } from './use-system-controls';
 
@@ -48,6 +51,17 @@ export function PlayerSession(props: PlayerSessionProps) {
   const [lastInteraction, setLastInteraction] = useState(0);
   const [castNotice, setCastNotice] = useState<string | null>(null);
   const { castFromPlayer } = useCastVideo();
+  const backgroundAudio = useAppSelector((state) => state.settings.backgroundAudio);
+  const dispatch = useAppDispatch();
+
+  // The sound carries on in the music service while the app is away, and the video picks it up on return.
+  useBackgroundAudio({
+    uri,
+    title,
+    paused: state.paused,
+    getProgress: player.getProgress,
+    onReturn: player.resumeAt,
+  });
 
   useEffect(() => {
     if (!castNotice) return;
@@ -146,6 +160,8 @@ export function PlayerSession(props: PlayerSessionProps) {
         pictureInPictureSupported={player.pictureInPicture.supported}
         onPictureInPicture={player.pictureInPicture.enter}
         onCast={castToLaptop}
+        backgroundAudio={backgroundAudio}
+        onToggleBackgroundAudio={() => dispatch(setBackgroundAudio(!backgroundAudio))}
         onBack={onBack}
         onPrevious={playPrevious}
         onNext={() => onNext?.()}

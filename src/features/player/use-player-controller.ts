@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useWindowDimensions } from 'react-native';
 
 import { useAppSelector } from '@/store';
 import VlcPlayer, {
@@ -24,6 +25,7 @@ type Handler<K extends keyof VlcPlayerViewProps> = NonNullable<VlcPlayerViewProp
 /** Owns playback state for one video and exposes native view props plus user actions. */
 export function usePlayerController(uri: string | undefined, onEnded?: () => void) {
   const settings = useAppSelector((state) => state.settings);
+  const { width, height } = useWindowDimensions();
   const { prepared, progressRef, reportProgress, markEnded, rememberFallback, restartFromCurrent, saveChoices } =
     usePlaybackSession(uri, settings);
   const playerRef = useRef<VlcPlayerViewRef>(null);
@@ -38,6 +40,8 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
   const [subtitleTrack, setSubtitleTrack] = useState<number>();
   const [speed, setSpeed] = useState(1);
   const [aspect, setAspect] = useState<AspectMode>(settings.defaultAspect);
+  // Once the aspect ratio is picked by hand, rotating no longer changes it for the rest of this video.
+  const aspectChosen = useRef(false);
   const [zoom, setZoom] = useState(1);
   const [boosted, setBoosted] = useState(false);
   const [hwOverride, setHwOverride] = useState<HwDecodingMode | null>(null);
@@ -63,6 +67,15 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     return () => clearTimeout(id);
   }, [notice]);
 
+  // Turning the phone sideways fills the screen, cropping the edges, and turning it back restores the fit.
+  // The rotation lock keeps the window in one orientation, so locking it also stops this.
+  const landscape = width > height;
+  useEffect(() => {
+    if (aspectChosen.current) return;
+    setAspect(landscape ? 'fitScreen' : settings.defaultAspect);
+    setZoom(1);
+  }, [landscape, settings.defaultAspect]);
+
   const seekTo = useCallback(
     (positionMs: number) => {
       const { duration } = progressRef.current;
@@ -77,6 +90,25 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
   const skip = useCallback((deltaMs: number) => seekTo(progressRef.current.position + deltaMs), [progressRef, seekTo]);
   const getProgress = useCallback(() => progressRef.current, [progressRef]);
   const togglePlay = useCallback(() => setPaused((value) => !value), []);
+
+  /**
+   * Puts the video back at `positionMs` and plays it, reopening the media rather than seeking the existing one:
+   * libVLC does not recover its video output after the surface is destroyed and recreated, so a plain seek comes
+   * back as sound over a black picture.
+   */
+  const resumeAt = useCallback(
+    (positionMs: number) => {
+      const { duration } = progressRef.current;
+      reportProgress(positionMs, duration);
+      setProgress({ position: positionMs, duration });
+      setPaused(false);
+      setError(null);
+      setPlaybackState('opening');
+      restartFromCurrent();
+      setAttempt((value) => value + 1);
+    },
+    [progressRef, reportProgress, restartFromCurrent]
+  );
 
   const retry = useCallback(() => {
     restartFromCurrent();
@@ -166,6 +198,7 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     },
     selectSpeed: setSpeed,
     selectAspect: (mode) => {
+      aspectChosen.current = true;
       setAspect(mode);
       setZoom(1);
     },
@@ -236,6 +269,7 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     seekTo,
     skip,
     togglePlay,
+    resumeAt,
     retry,
     settingsActions,
     pictureInPicture: {

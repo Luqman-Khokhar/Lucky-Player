@@ -33,4 +33,13 @@
   <string name="cast_notification_address">Open %1$s on your laptop · code %2$s</string>
   <string name="cast_notification_no_network">Waiting for Wi-Fi or hotspot</string>
   <string name="cast_stop">Stop</string>
+
+  <string name="audio_notification_title">Lucky Player</string>
+  <string name="audio_notification_channel">Music playback</string>
+  <string name="audio_notification_channel_description">Shows while Lucky Player is playing music</string>
+  <string name="audio_unknown_artist">Unknown artist</string>
+  <string name="audio_play">Play</string>
+  <string name="audio_pause">Pause</string>
+  <string name="audio_next">Next track</string>
+  <string name="audio_previous">Previous track</string>
 </resources>

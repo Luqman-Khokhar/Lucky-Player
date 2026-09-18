@@ -1,5 +1,5 @@
-import { FoldersScreen } from '@/features/library/folders-screen';
+import { LibraryScreen } from '@/features/library/library-screen';
 
-export default function FoldersRoute() {
-  return <FoldersScreen />;
+export default function LibraryRoute() {
+  return <LibraryScreen />;
 }

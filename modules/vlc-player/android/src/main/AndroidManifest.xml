@@ -21,6 +21,10 @@
         android:value="Keeps the user's volume boost and equalizer applied to device audio while other apps play" />
     </service>
     <service
+      android:name="expo.modules.vlcplayer.AudioPlaybackService"
+      android:exported="false"
+      android:foregroundServiceType="mediaPlayback" />
+    <service
       android:name="expo.modules.vlcplayer.cast.CastService"
       android:exported="false"
       android:foregroundServiceType="mediaPlayback|mediaProjection" />

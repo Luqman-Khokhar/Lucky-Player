@@ -37,18 +37,20 @@ class VlcPlayerModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("VlcPlayer")
 
-    Events("onSoundSettingsChanged", "onCastStateChanged", "onCastPlaybackChanged")
+    Events("onSoundSettingsChanged", "onCastStateChanged", "onCastPlaybackChanged", "onAudioStateChanged")
 
     OnCreate {
       SoundEffectsController.listener = { settings -> sendEvent("onSoundSettingsChanged", mapOf("settings" to settings)) }
       CastSession.listener = { state -> sendEvent("onCastStateChanged", mapOf("state" to state)) }
       CastSession.playbackListener = { playback -> sendEvent("onCastPlaybackChanged", mapOf("playback" to playback)) }
+      AudioPlayback.listener = { state -> sendEvent("onAudioStateChanged", mapOf("state" to state)) }
     }
 
     OnDestroy {
       SoundEffectsController.listener = null
       CastSession.listener = null
       CastSession.playbackListener = null
+      AudioPlayback.listener = null
     }
 
     AsyncFunction("castMedia") { receiverId: String, uri: String, title: String, startMs: Double, durationMs: Double, promise: Promise ->
@@ -132,6 +134,64 @@ class VlcPlayerModule : Module() {
         } catch (e: Exception) {
           promise.reject("ERR_SCAN", e.message ?: "Could not scan videos", e)
         }
+      }
+    }
+
+    AsyncFunction("audioSetQueue") { queueJson: String, startIndex: Int, positionMs: Double, autoPlay: Boolean ->
+      AudioPlayback.setQueue(context, queueJson, startIndex, positionMs.toLong(), autoPlay)
+    }
+
+    AsyncFunction("audioQueueAdd") { queueJson: String, playNext: Boolean ->
+      AudioPlayback.queueAdd(context, queueJson, playNext)
+    }
+
+    AsyncFunction("audioQueueMove") { from: Int, to: Int -> AudioPlayback.queueMove(from, to) }
+
+    AsyncFunction("audioQueueRemove") { index: Int -> AudioPlayback.queueRemove(index) }
+
+    AsyncFunction("getAudioQueue") { AudioPlayback.queueSnapshot() }
+
+    AsyncFunction("audioPlay") { AudioPlayback.play() }
+
+    AsyncFunction("audioPause") { AudioPlayback.pause() }
+
+    AsyncFunction("audioToggle") { AudioPlayback.toggle() }
+
+    AsyncFunction("audioNext") { AudioPlayback.next() }
+
+    AsyncFunction("audioPrevious") { AudioPlayback.previous() }
+
+    AsyncFunction("audioPlayIndex") { index: Int -> AudioPlayback.playIndex(index) }
+
+    AsyncFunction("audioSeek") { positionMs: Double -> AudioPlayback.seek(positionMs.toLong()) }
+
+    AsyncFunction("audioSetRepeat") { mode: String -> AudioPlayback.setRepeat(mode) }
+
+    AsyncFunction("audioSetShuffle") { enabled: Boolean -> AudioPlayback.setShuffle(enabled) }
+
+    AsyncFunction("audioSetRate") { rate: Double -> AudioPlayback.setRate(rate.toFloat()) }
+
+    AsyncFunction("audioStop") { AudioPlayback.stop() }
+
+    AsyncFunction("getAudioState") { AudioPlayback.state() }
+
+    AsyncFunction("scanAudio") { promise: Promise ->
+      val appContext = context
+      scanExecutor.execute {
+        try {
+          promise.resolve(MediaScanner.scanAudio(appContext))
+        } catch (e: SecurityException) {
+          promise.reject("ERR_PERMISSION", "Audio access is not granted", e)
+        } catch (e: Exception) {
+          promise.reject("ERR_SCAN", e.message ?: "Could not scan audio", e)
+        }
+      }
+    }
+
+    AsyncFunction("getAlbumArt") { uri: String, key: String, width: Int, promise: Promise ->
+      val appContext = context
+      thumbnailExecutor.execute {
+        promise.resolve(ThumbnailCache.get(appContext, uri, key, width, artwork = true))
       }
     }
 

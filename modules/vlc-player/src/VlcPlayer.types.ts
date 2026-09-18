@@ -143,6 +143,78 @@ export type ScannedVideo = {
   relativePath: string;
 };
 
+export type ScannedAudio = {
+  mediaId: number;
+  /** content://media/external/audio/media/<id> */
+  uri: string;
+  /** File name on disk. */
+  name: string;
+  /** Tagged title, falling back to the file name. */
+  title: string;
+  size: number;
+  /** Milliseconds */
+  duration: number;
+  /** Epoch milliseconds */
+  modifiedAt: number;
+  addedAt: number;
+  mimeType: string;
+  /** Empty when the file carries no tag. */
+  artist: string;
+  album: string;
+  albumId: number;
+  /** Track number within its disc, 0 when untagged. */
+  trackNo: number;
+  /** 0 when untagged. */
+  year: number;
+  bucketId: string;
+  bucketName: string;
+  relativePath: string;
+};
+
+export type RepeatMode = 'off' | 'all' | 'one';
+
+/** One entry of the music queue handed to the playback service. */
+export type AudioQueueItem = {
+  uri: string;
+  title: string;
+  artist: string;
+  album: string;
+  /** Cache key for the album art, from `artKeyFor`. Empty falls back to a key derived from the uri. */
+  artKey: string;
+  /** Milliseconds; 0 when unknown. */
+  duration: number;
+  /** False for a video played as audio, whose picture is a frame rather than embedded art. */
+  artwork?: boolean;
+};
+
+/** A queue entry as the queue screen sees it, in play order. */
+export type AudioQueueEntry = AudioQueueItem & { index: number };
+
+export type AudioPlaybackState = {
+  /** False when nothing is loaded and the notification is gone. */
+  active: boolean;
+  playing: boolean;
+  loading: boolean;
+  uri: string | null;
+  title: string | null;
+  artist: string | null;
+  album: string | null;
+  artKey: string | null;
+  positionMs: number;
+  durationMs: number;
+  /** Position in the play order, which is what the queue screen lists. */
+  index: number | null;
+  queueSize: number;
+  /** Bumped whenever the queue changes; re-read the queue when it moves. */
+  queueVersion: number;
+  repeat: RepeatMode;
+  shuffle: boolean;
+  rate: number;
+  /** Set only on the state that reports a failure. */
+  errorCode?: string;
+  errorMessage?: string;
+};
+
 export type PickedFolder = {
   /** Persisted SAF tree URI */
   uri: string;
