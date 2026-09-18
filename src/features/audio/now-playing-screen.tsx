@@ -1,6 +1,9 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -21,6 +24,20 @@ import { AlbumArt } from './album-art';
 const SEEK_STEP_MS = 1000;
 const ART_MAX_WIDTH = 360;
 
+/** Downward travel, or fling speed, that closes the player back to the mini-player. */
+const DISMISS_DISTANCE = 120;
+const DISMISS_VELOCITY = 900;
+/** Movement before the sheet starts following the finger, so taps and the slider are not stolen. */
+const DRAG_SLOP = 16;
+
+// The sheet animates itself in and out on the UI thread; the route itself has no transition, so
+// closing never waits for a round trip to JS before the screen starts moving.
+/** How dark the screen behind gets once the player is fully open. */
+const SCRIM_OPACITY = 0.6;
+const OPEN_SPRING = { damping: 26, stiffness: 240, mass: 0.9 } as const;
+const SETTLE_SPRING = { damping: 22, stiffness: 260, mass: 0.8 } as const;
+const CLOSE_DURATION_MS = 220;
+
 const REPEAT_ORDER: RepeatMode[] = ['off', 'all', 'one'];
 const REPEAT_ICON = { off: 'repeat', all: 'repeat_on', one: 'repeat_one_on' } as const;
 const REPEAT_LABEL = {
@@ -38,10 +55,65 @@ export function NowPlayingScreen() {
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const goBack = useGoBack();
-  const { width } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const audio = useAppSelector((state) => state.audio);
 
   const artSize = Math.min(width - Spacing.four * 2, ART_MAX_WIDTH);
+
+  // Starts off screen and springs up on mount, so opening and closing are one continuous movement.
+  const offset = useSharedValue(height);
+
+  useEffect(() => {
+    offset.set(withSpring(0, OPEN_SPRING));
+  }, [offset]);
+
+  /** Slides the sheet the rest of the way down, then leaves the route once it is out of sight. */
+  const close = useCallback(() => {
+    offset.set(
+      withTiming(height, { duration: CLOSE_DURATION_MS, easing: Easing.in(Easing.cubic) }, (finished) => {
+        'worklet';
+        if (finished) scheduleOnRN(goBack);
+      })
+    );
+  }, [goBack, height, offset]);
+
+  const swipeDown = useMemo(
+    () =>
+      Gesture.Pan()
+        // Downward only, and never while the finger is travelling sideways across the seek slider.
+        .activeOffsetY(DRAG_SLOP)
+        .failOffsetY(-DRAG_SLOP)
+        .failOffsetX([-DRAG_SLOP, DRAG_SLOP])
+        .onUpdate((event) => {
+          offset.set(Math.max(0, event.translationY));
+        })
+        .onEnd((event) => {
+          if (event.translationY > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY) {
+            // The exit starts in this same frame, carrying the fling, so the sheet never stops at the finger.
+            offset.set(
+              withSpring(
+                height,
+                { ...SETTLE_SPRING, velocity: Math.max(event.velocityY, 600), overshootClamping: true },
+                (finished) => {
+                  'worklet';
+                  if (finished) scheduleOnRN(goBack);
+                }
+              )
+            );
+          } else {
+            offset.set(withSpring(0, SETTLE_SPRING));
+          }
+        }),
+    [goBack, height, offset]
+  );
+
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: offset.get() }] }));
+
+  // The list behind darkens as the player rises and comes back as it falls, tied to the same travel.
+  const scrimStyle = useAnimatedStyle(() => {
+    const progress = Math.min(1, offset.get() / Math.max(1, height));
+    return { opacity: (1 - progress) * SCRIM_OPACITY };
+  });
 
   const scrub = useCallback(
     (value: number) => {
@@ -68,106 +140,128 @@ export function NowPlayingScreen() {
   const nextRepeat = REPEAT_ORDER[(REPEAT_ORDER.indexOf(audio.repeat) + 1) % REPEAT_ORDER.length];
 
   return (
-    <ThemedView style={styles.root}>
-      <ScreenHeader title="Now playing" subtitle={audio.album ?? undefined} onBack={goBack} />
-      <View style={[styles.body, { paddingBottom: insets.bottom + Spacing.four }]}>
-        <View style={[styles.art, { width: artSize, height: artSize, backgroundColor: theme.backgroundSelected }]}>
-          {audio.uri ? (
-            <AlbumArt uri={audio.uri} artKey={audio.artKey ?? audio.uri} width={artSize} icon="album" />
-          ) : null}
-        </View>
+    <View style={styles.root} pointerEvents="box-none">
+      <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]} pointerEvents="none" />
+      <GestureDetector gesture={swipeDown}>
+        <Animated.View style={[styles.root, sheetStyle]}>
+          <ThemedView style={styles.root}>
+            <ScreenHeader
+              title="Now playing"
+              subtitle={audio.album ?? undefined}
+              actions={
+                <IconButton
+                  icon="keyboard_arrow_down"
+                  label="Close the player"
+                  color={theme.textSecondary}
+                  pressedColor={theme.backgroundSelected}
+                  onPress={() => close()}
+                />
+              }
+            />
+            <View style={[styles.body, { paddingBottom: insets.bottom + Spacing.four }]}>
+              <View style={[styles.art, { width: artSize, height: artSize, backgroundColor: theme.backgroundSelected }]}>
+                {audio.uri ? (
+                  <AlbumArt uri={audio.uri} artKey={audio.artKey ?? audio.uri} width={artSize} icon="album" />
+                ) : null}
+              </View>
 
-        <View style={styles.titles}>
-          <ThemedText type="subtitle" numberOfLines={2} style={styles.title}>
-            {audio.title ?? ''}
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-            {audio.artist || 'Unknown artist'}
-          </ThemedText>
-        </View>
+              <View style={styles.titles}>
+                <ThemedText type="subtitle" numberOfLines={2} style={styles.title}>
+                  {audio.title ?? ''}
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                  {audio.artist || 'Unknown artist'}
+                </ThemedText>
+              </View>
 
-        <View style={styles.progress}>
-          <Slider
-            value={Math.min(audio.positionMs, max)}
-            min={0}
-            max={max}
-            step={SEEK_STEP_MS}
-            onChange={scrub}
-            accessibilityLabel="Playback position"
-            accessibilityValueText={`${formatTime(audio.positionMs)} of ${formatTime(audio.durationMs)}`}
-          />
-          <View style={styles.times}>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
-              {formatTime(audio.positionMs)}
-            </ThemedText>
-            <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
-              {formatTime(audio.durationMs)}
-            </ThemedText>
-          </View>
-        </View>
+              <View style={styles.progress}>
+                <Slider
+                  value={Math.min(audio.positionMs, max)}
+                  min={0}
+                  max={max}
+                  step={SEEK_STEP_MS}
+                  onChange={scrub}
+                  accessibilityLabel="Playback position"
+                  accessibilityValueText={`${formatTime(audio.positionMs)} of ${formatTime(audio.durationMs)}`}
+                />
+                <View style={styles.times}>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
+                    {formatTime(audio.positionMs)}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.time}>
+                    {formatTime(audio.durationMs)}
+                  </ThemedText>
+                </View>
+              </View>
 
-        <View style={styles.controls}>
-          <IconButton
-            icon={audio.shuffle ? 'shuffle_on' : 'shuffle'}
-            label={audio.shuffle ? 'Shuffle on. Tap to play in order' : 'Shuffle off. Tap to shuffle the queue'}
-            color={audio.shuffle ? theme.accent : theme.textSecondary}
-            pressedColor={theme.backgroundSelected}
-            onPress={() => VlcPlayer.audioSetShuffle(!audio.shuffle).catch(warn('shuffle'))}
-          />
-          <IconButton
-            icon="skip_previous"
-            label="Previous track"
-            size="lg"
-            color={theme.text}
-            pressedColor={theme.backgroundSelected}
-            onPress={() => VlcPlayer.audioPrevious().catch(warn('previous'))}
-          />
-          <IconButton
-            icon={audio.playing ? 'pause' : 'play_arrow'}
-            label={audio.playing ? 'Pause' : 'Play'}
-            size="xl"
-            color={theme.onAccent}
-            backgroundColor={theme.accent}
-            pressedColor={theme.accent}
-            onPress={() => VlcPlayer.audioToggle().catch(warn('toggle'))}
-          />
-          <IconButton
-            icon="skip_next"
-            label="Next track"
-            size="lg"
-            color={theme.text}
-            pressedColor={theme.backgroundSelected}
-            onPress={() => VlcPlayer.audioNext().catch(warn('next'))}
-          />
-          <IconButton
-            icon={REPEAT_ICON[audio.repeat]}
-            label={REPEAT_LABEL[audio.repeat]}
-            color={audio.repeat === 'off' ? theme.textSecondary : theme.accent}
-            pressedColor={theme.backgroundSelected}
-            onPress={() => VlcPlayer.audioSetRepeat(nextRepeat).catch(warn('repeat'))}
-          />
-        </View>
+              <View style={styles.controls}>
+                <IconButton
+                  icon={audio.shuffle ? 'shuffle_on' : 'shuffle'}
+                  label={audio.shuffle ? 'Shuffle on. Tap to play in order' : 'Shuffle off. Tap to shuffle the queue'}
+                  color={audio.shuffle ? theme.accent : theme.textSecondary}
+                  pressedColor={theme.backgroundSelected}
+                  onPress={() => VlcPlayer.audioSetShuffle(!audio.shuffle).catch(warn('shuffle'))}
+                />
+                <IconButton
+                  icon="skip_previous"
+                  label="Previous track"
+                  size="lg"
+                  color={theme.text}
+                  pressedColor={theme.backgroundSelected}
+                  onPress={() => VlcPlayer.audioPrevious().catch(warn('previous'))}
+                />
+                <IconButton
+                  icon={audio.playing ? 'pause' : 'play_arrow'}
+                  label={audio.playing ? 'Pause' : 'Play'}
+                  size="xl"
+                  color={theme.onAccent}
+                  backgroundColor={theme.accent}
+                  pressedColor={theme.accent}
+                  onPress={() => VlcPlayer.audioToggle().catch(warn('toggle'))}
+                />
+                <IconButton
+                  icon="skip_next"
+                  label="Next track"
+                  size="lg"
+                  color={theme.text}
+                  pressedColor={theme.backgroundSelected}
+                  onPress={() => VlcPlayer.audioNext().catch(warn('next'))}
+                />
+                <IconButton
+                  icon={REPEAT_ICON[audio.repeat]}
+                  label={REPEAT_LABEL[audio.repeat]}
+                  color={audio.repeat === 'off' ? theme.textSecondary : theme.accent}
+                  pressedColor={theme.backgroundSelected}
+                  onPress={() => VlcPlayer.audioSetRepeat(nextRepeat).catch(warn('repeat'))}
+                />
+              </View>
 
-        <View style={styles.footer}>
-          <ThemedText type="small" themeColor="textSecondary">
-            {audio.queueSize > 1 && audio.index != null ? `Track ${audio.index + 1} of ${audio.queueSize}` : ' '}
-          </ThemedText>
-          <IconButton
-            icon="close"
-            label="Stop playback and clear the queue"
-            color={theme.textSecondary}
-            pressedColor={theme.backgroundSelected}
-            onPress={() => VlcPlayer.audioStop().catch(warn('stop'))}
-          />
-        </View>
-      </View>
-    </ThemedView>
+              <View style={styles.footer}>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {audio.queueSize > 1 && audio.index != null ? `Track ${audio.index + 1} of ${audio.queueSize}` : ' '}
+                </ThemedText>
+                <IconButton
+                  icon="close"
+                  label="Stop playback and clear the queue"
+                  color={theme.textSecondary}
+                  pressedColor={theme.backgroundSelected}
+                  onPress={() => VlcPlayer.audioStop().catch(warn('stop'))}
+                />
+              </View>
+              </View>
+          </ThemedView>
+        </Animated.View>
+      </GestureDetector>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  scrim: {
+    backgroundColor: '#000000',
   },
   body: {
     flex: 1,

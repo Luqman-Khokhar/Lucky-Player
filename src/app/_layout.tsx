@@ -44,7 +44,11 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="folder/[bucketId]" />
             <Stack.Screen name="player" options={{ animation: 'fade' }} />
-            <Stack.Screen name="now-playing" />
+            <Stack.Screen
+              name="now-playing"
+              // Transparent so the list stays on screen behind the player and can be dimmed with it.
+              options={{ animation: 'none', presentation: 'transparentModal' }}
+            />
             <Stack.Screen name="album/[albumId]" />
             <Stack.Screen name="music-folder/[bucketId]" />
             <Stack.Screen name="cast" />
