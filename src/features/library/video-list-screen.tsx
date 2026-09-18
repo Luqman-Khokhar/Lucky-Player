@@ -13,6 +13,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useAppSelector } from '@/store';
 import { formatCount } from '@/utils/format';
 
+import type { LibrarySectionProps } from './library-section';
 import { PermissionGate } from './permission-gate';
 import { SortChips, type SortOption } from './sort-chips';
 import { useLibraryActions } from './use-library-actions';
@@ -29,7 +30,7 @@ const VIDEO_SORTS: SortOption<VideoSortKey>[] = [
   { key: 'size', label: 'Size', initialDirection: 'desc' },
 ];
 
-type VideoListScreenProps = {
+type VideoListScreenProps = LibrarySectionProps & {
   title: string;
   /** Limit to one MediaStore folder. */
   bucketId?: string;
@@ -37,7 +38,13 @@ type VideoListScreenProps = {
   allowFavoritesFilter?: boolean;
 };
 
-export function VideoListScreen({ title, bucketId, onBack, allowFavoritesFilter = false }: VideoListScreenProps) {
+export function VideoListScreen({
+  title,
+  bucketId,
+  onBack,
+  allowFavoritesFilter = false,
+  segments,
+}: VideoListScreenProps) {
   const playVideo = usePlayVideo();
   const scanning = useAppSelector((state) => state.library.scanStatus === 'scanning');
   const { rescan, toggleFavorite } = useLibraryActions();
@@ -119,6 +126,7 @@ export function VideoListScreen({ title, bucketId, onBack, allowFavoritesFilter 
   return (
     <ThemedView style={styles.root}>
       <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} />
+      {segments}
       <PermissionGate>
         <View style={styles.search}>
           <SearchField

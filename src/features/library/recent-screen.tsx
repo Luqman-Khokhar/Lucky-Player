@@ -10,6 +10,7 @@ import { Spacing } from '@/constants/theme';
 import { listRecent, type LibraryVideo } from '@/db';
 import { formatCount } from '@/utils/format';
 
+import type { LibrarySectionProps } from './library-section';
 import { PermissionGate } from './permission-gate';
 import { useLibraryActions } from './use-library-actions';
 import { useLibraryQuery } from './use-library-query';
@@ -18,7 +19,12 @@ import { VideoRow } from './video-row';
 
 const RECENT_LIMIT = 50;
 
-export function RecentScreen() {
+type RecentScreenProps = LibrarySectionProps & {
+  /** Where the empty state sends the user; defaults to the library tab. */
+  onBrowseFolders?: () => void;
+};
+
+export function RecentScreen({ segments, onBrowseFolders }: RecentScreenProps) {
   const router = useRouter();
   const { toggleFavorite } = useLibraryActions();
   const recent = useLibraryQuery('recent', () => listRecent(RECENT_LIMIT));
@@ -45,7 +51,7 @@ export function RecentScreen() {
           icon="history"
           title="Nothing to continue yet"
           message="Videos you start watching appear here, ready to pick up where you left off."
-          action={{ label: 'Browse folders', onPress: () => router.navigate('/') }}
+          action={{ label: 'Browse folders', onPress: onBrowseFolders ?? (() => router.navigate('/')) }}
         />
       );
     }
@@ -67,6 +73,7 @@ export function RecentScreen() {
         title="Continue watching"
         subtitle={recent.data?.length ? formatCount(recent.data.length, 'video') : undefined}
       />
+      {segments}
       <PermissionGate>{renderBody()}</PermissionGate>
     </ThemedView>
   );

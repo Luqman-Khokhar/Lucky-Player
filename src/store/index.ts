@@ -6,6 +6,7 @@ import libraryReducer from './library-slice';
 import playQueueReducer from './play-queue-slice';
 import settingsReducer from './settings-slice';
 import soundReducer from './sound-slice';
+import uiReducer from './ui-slice';
 
 export const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ export const store = configureStore({
     playQueue: playQueueReducer,
     sound: soundReducer,
     cast: castReducer,
+    ui: uiReducer,
   },
 });
 
