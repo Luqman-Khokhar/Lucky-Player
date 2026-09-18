@@ -111,7 +111,7 @@ export function SeekBar({ position, duration, skipMs, onSeek, onScrub }: SeekBar
         <View style={[styles.track, { backgroundColor: theme.playerTrack }]}>
           <Animated.View style={[styles.fill, { backgroundColor: theme.playerAccent }, fillStyle]} />
         </View>
-        <Animated.View pointerEvents="none" style={[styles.thumb, Elevation.low, { backgroundColor: theme.playerAccent, shadowColor: '#000000' }, thumbStyle]}
+        <Animated.View pointerEvents="none" style={[styles.thumb, Elevation.low, { backgroundColor: theme.playerAccent, shadowColor: theme.playerBackground }, thumbStyle]}
         />
         {scrubMs !== null ? (
           <Animated.View pointerEvents="none" style={[styles.bubble, { backgroundColor: theme.playerSheet }, bubbleStyle]}>

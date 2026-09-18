@@ -33,7 +33,7 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
         type === 'label' && styles.label,
         type === 'caption' && styles.caption,
         type === 'link' && styles.link,
-        type === 'linkPrimary' && styles.linkPrimary,
+        type === 'linkPrimary' && [styles.linkPrimary, { color: theme.accentText }],
         type === 'code' && styles.code,
         style,
       ]}
@@ -93,7 +93,6 @@ const styles = StyleSheet.create({
   linkPrimary: {
     lineHeight: 30,
     fontSize: 14,
-    color: '#3c87f7',
   },
   code: {
     fontFamily: Fonts.mono,
