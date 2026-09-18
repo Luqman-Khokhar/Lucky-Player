@@ -14,6 +14,7 @@ import { StateView } from '@/components/ui/state-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { formatTime } from '@/features/player/format-time';
 import { useGoBack } from '@/hooks/use-go-back';
+import { useRouter } from 'expo-router';
 import { useTheme } from '@/hooks/use-theme';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { audioScrubbed } from '@/store/audio-slice';
@@ -55,6 +56,7 @@ export function NowPlayingScreen() {
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const goBack = useGoBack();
+  const router = useRouter();
   const { height, width } = useWindowDimensions();
   const audio = useAppSelector((state) => state.audio);
 
@@ -237,6 +239,13 @@ export function NowPlayingScreen() {
               </View>
 
               <View style={styles.footer}>
+                <IconButton
+                  icon="queue_music"
+                  label={`Open the queue, ${audio.queueSize} tracks`}
+                  color={theme.textSecondary}
+                  pressedColor={theme.backgroundSelected}
+                  onPress={() => router.push('/queue')}
+                />
                 <ThemedText type="small" themeColor="textSecondary">
                   {audio.queueSize > 1 && audio.index != null ? `Track ${audio.index + 1} of ${audio.queueSize}` : ' '}
                 </ThemedText>
@@ -248,7 +257,7 @@ export function NowPlayingScreen() {
                   onPress={() => VlcPlayer.audioStop().catch(warn('stop'))}
                 />
               </View>
-              </View>
+            </View>
           </ThemedView>
         </Animated.View>
       </GestureDetector>

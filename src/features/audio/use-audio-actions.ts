@@ -9,7 +9,7 @@ import VlcPlayer, { type AudioQueueItem } from '@modules/vlc-player';
 /** Resuming this close to the end starts the track over instead. */
 const RESUME_TAIL_MS = 5_000;
 
-function toQueueItem(track: LibraryTrack): AudioQueueItem {
+export function toQueueItem(track: LibraryTrack): AudioQueueItem {
   return {
     uri: track.uri,
     title: track.title,
@@ -46,7 +46,7 @@ export function useAudioActions() {
           const position = saved && saved.duration > 0 && saved.position < saved.duration - RESUME_TAIL_MS
             ? saved.position
             : 0;
-          return VlcPlayer.audioSetQueue(JSON.stringify(queue), startIndex, position);
+          return VlcPlayer.audioSetQueue(JSON.stringify(queue), startIndex, position, true);
         })
         .then(() => router.push('/now-playing'))
         .catch((error: unknown) => console.warn('[audio] could not start playback', error));
@@ -54,5 +54,14 @@ export function useAudioActions() {
     [router]
   );
 
-  return { toggleFavorite, playTrack };
+  /** Queues tracks after the playing one, or at the end. Starts playback when nothing is loaded. */
+  const queueTracks = useCallback(
+    (tracks: readonly LibraryTrack[], playNext: boolean) =>
+      VlcPlayer.audioQueueAdd(JSON.stringify(tracks.map(toQueueItem)), playNext).catch((error: unknown) =>
+        console.warn('[audio] could not queue tracks', error)
+      ),
+    []
+  );
+
+  return { toggleFavorite, playTrack, queueTracks };
 }

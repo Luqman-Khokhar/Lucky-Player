@@ -65,11 +65,14 @@ object AudioPlayback {
   private var session: MediaSession? = null
   private var audioFocus: PlaybackAudioFocus? = null
 
-  private var queue: List<AudioItem> = emptyList()
-  /** Indices into [queue], in play order. Equal to the queue order unless shuffle is on. */
-  private var order: List<Int> = emptyList()
-  private var orderPosition = -1
+  /** The queue in play order: shuffling reorders this list rather than indexing around it. */
+  private var queue: MutableList<AudioItem> = mutableListOf()
+  /** The queue as the user handed it over, kept so turning shuffle off restores that order. */
+  private var unshuffled: List<AudioItem> = emptyList()
+  private var currentIndex = -1
   private var generation = 0
+  /** Bumped on every queue change so JS knows to re-read it, instead of shipping the list on every tick. */
+  private var queueVersion = 0
 
   private var playing = false
   private var loading = false
@@ -88,7 +91,7 @@ object AudioPlayback {
     get() = queue.isNotEmpty()
 
   internal val current: AudioItem?
-    get() = order.getOrNull(orderPosition)?.let { queue.getOrNull(it) }
+    get() = queue.getOrNull(currentIndex)
 
   internal val isPlaying: Boolean
     get() = playing
@@ -98,16 +101,91 @@ object AudioPlayback {
 
   // region JS API — main thread only
 
-  /** Replaces the queue and starts at [startIndex]. `queueJson` is an array of track objects. */
-  fun setQueue(context: Context, queueJson: String, startIndex: Int, positionMs: Long) {
+  /**
+   * Replaces the queue and starts at [startIndex]. `queueJson` is an array of track objects.
+   * With [autoPlay] false the track is loaded paused, which is how a saved queue comes back after a restart.
+   */
+  fun setQueue(context: Context, queueJson: String, startIndex: Int, positionMs: Long, autoPlay: Boolean) {
     appContext = context.applicationContext
-    queue = parseQueue(queueJson)
+    val parsed = parseQueue(queueJson)
+    if (parsed.isEmpty()) {
+      stop()
+      return
+    }
+    queue = parsed.toMutableList()
+    unshuffled = parsed
+    currentIndex = startIndex.coerceIn(0, queue.size - 1)
+    if (shuffle) shuffleQueue(keeping = currentIndex)
+    queueVersion++
+    openCurrent(positionMs, autoPlay = autoPlay)
+  }
+
+  /** Adds tracks after the playing one ([playNext]) or at the end. Starts playback when nothing is loaded. */
+  fun queueAdd(context: Context, queueJson: String, playNext: Boolean) {
+    appContext = context.applicationContext
+    val added = parseQueue(queueJson)
+    if (added.isEmpty()) return
+    if (queue.isEmpty()) {
+      setQueue(context, queueJson, 0, 0, autoPlay = true)
+      return
+    }
+    val at = if (playNext) (currentIndex + 1).coerceIn(0, queue.size) else queue.size
+    queue.addAll(at, added)
+    unshuffled = unshuffled + added
+    queueVersion++
+    publish(force = true)
+  }
+
+  /** Moves a queued track. Indexes are positions in the play order, as the queue screen shows them. */
+  fun queueMove(from: Int, to: Int) {
+    if (from !in queue.indices || to !in queue.indices || from == to) return
+    val item = queue.removeAt(from)
+    queue.add(to, item)
+    currentIndex = when {
+      // The playing track moved: follow it.
+      currentIndex == from -> to
+      // A track moved across the playing one: its index shifts by one.
+      from < currentIndex && to >= currentIndex -> currentIndex - 1
+      from > currentIndex && to <= currentIndex -> currentIndex + 1
+      else -> currentIndex
+    }
+    queueVersion++
+    publish(force = true)
+  }
+
+  /** Removes a queued track. Removing the playing one steps to the next, or stops at the end of the queue. */
+  fun queueRemove(index: Int) {
+    if (index !in queue.indices) return
+    val removed = queue.removeAt(index)
+    val inUnshuffled = unshuffled.indexOfFirst { it.uri == removed.uri }
+    if (inUnshuffled >= 0) unshuffled = unshuffled.filterIndexed { position, _ -> position != inUnshuffled }
+    queueVersion++
     if (queue.isEmpty()) {
       stop()
       return
     }
-    rebuildOrder(startIndex.coerceIn(0, queue.size - 1))
-    openCurrent(positionMs, autoPlay = true)
+    when {
+      index < currentIndex -> currentIndex--
+      index == currentIndex -> {
+        currentIndex = currentIndex.coerceAtMost(queue.size - 1)
+        openCurrent(0, autoPlay = playing)
+        return
+      }
+    }
+    publish(force = true)
+  }
+
+  /** The queue in play order, for the queue screen. */
+  fun queueSnapshot(): List<Map<String, Any?>> = queue.mapIndexed { index, item ->
+    mapOf(
+      "uri" to item.uri,
+      "title" to item.title,
+      "artist" to item.artist,
+      "album" to item.album,
+      "artKey" to item.artKey,
+      "duration" to item.durationMs,
+      "index" to index
+    )
   }
 
   fun play() {
@@ -141,7 +219,7 @@ object AudioPlayback {
 
   fun next(fromUser: Boolean = true) {
     if (queue.isEmpty()) return
-    val last = orderPosition >= order.size - 1
+    val last = currentIndex >= queue.size - 1
     if (last && repeat == REPEAT_OFF && !fromUser) {
       // The queue ran out on its own: stop at the end instead of wrapping around.
       playing = false
@@ -150,7 +228,7 @@ object AudioPlayback {
       publish()
       return
     }
-    orderPosition = if (last) 0 else orderPosition + 1
+    currentIndex = if (last) 0 else currentIndex + 1
     openCurrent(0, autoPlay = true)
   }
 
@@ -160,14 +238,13 @@ object AudioPlayback {
       seek(0)
       return
     }
-    orderPosition = if (orderPosition <= 0) order.size - 1 else orderPosition - 1
+    currentIndex = if (currentIndex <= 0) queue.size - 1 else currentIndex - 1
     openCurrent(0, autoPlay = true)
   }
 
   fun playIndex(index: Int) {
-    val position = order.indexOf(index)
-    if (position < 0) return
-    orderPosition = position
+    if (index !in queue.indices) return
+    currentIndex = index
     openCurrent(0, autoPlay = true)
   }
 
@@ -189,8 +266,14 @@ object AudioPlayback {
   fun setShuffle(enabled: Boolean) {
     if (shuffle == enabled) return
     shuffle = enabled
-    val playingIndex = order.getOrNull(orderPosition) ?: 0
-    rebuildOrder(playingIndex)
+    val playingUri = current?.uri
+    if (enabled) {
+      shuffleQueue(keeping = currentIndex)
+    } else {
+      queue = unshuffled.toMutableList()
+      currentIndex = queue.indexOfFirst { it.uri == playingUri }.coerceAtLeast(0)
+    }
+    queueVersion++
     publish(force = true)
   }
 
@@ -205,9 +288,10 @@ object AudioPlayback {
     playing = false
     loading = false
     pausedByFocusLoss = false
-    queue = emptyList()
-    order = emptyList()
-    orderPosition = -1
+    queue = mutableListOf()
+    unshuffled = emptyList()
+    currentIndex = -1
+    queueVersion++
     positionMs = 0
     durationMs = 0
     loadedUri = null
@@ -375,16 +459,15 @@ object AudioPlayback {
     notificationListener?.invoke()
   }
 
-  private fun rebuildOrder(startIndex: Int) {
-    val indices = queue.indices.toMutableList()
-    if (shuffle) {
-      indices.shuffle()
-      // The track the user started stays first; the rest are shuffled behind it.
-      indices.remove(startIndex)
-      indices.add(0, startIndex)
+  /** Shuffles the queue in place, leaving the track at [keeping] first so playback does not jump. */
+  private fun shuffleQueue(keeping: Int) {
+    val playing = queue.getOrNull(keeping)
+    queue.shuffle()
+    if (playing != null) {
+      queue.remove(playing)
+      queue.add(0, playing)
     }
-    order = indices
-    orderPosition = order.indexOf(startIndex).coerceAtLeast(0)
+    currentIndex = 0
   }
 
   private fun parseQueue(json: String): List<AudioItem> = try {
@@ -486,8 +569,9 @@ object AudioPlayback {
       "artKey" to item?.artKey,
       "positionMs" to positionMs,
       "durationMs" to durationMs,
-      "index" to order.getOrNull(orderPosition),
+      "index" to currentIndex.takeIf { it >= 0 },
       "queueSize" to queue.size,
+      "queueVersion" to queueVersion,
       "repeat" to repeat,
       "shuffle" to shuffle,
       "rate" to rate.toDouble()

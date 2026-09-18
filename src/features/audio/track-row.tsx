@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { Icon } from '@/components/ui/icon';
 import { IconButton } from '@/components/ui/icon-button';
 import { Spacing } from '@/constants/theme';
 import type { LibraryTrack } from '@/db';
@@ -18,6 +19,8 @@ type TrackRowProps = {
   showTrackNumber?: boolean;
   onPress: (track: LibraryTrack) => void;
   onToggleFavorite: (track: LibraryTrack) => void;
+  /** Opens the row's action menu. Without it the row shows the favorite button instead. */
+  onMore?: (track: LibraryTrack) => void;
 };
 
 export const TrackRow = memo(function TrackRow({
@@ -26,6 +29,7 @@ export const TrackRow = memo(function TrackRow({
   showTrackNumber = false,
   onPress,
   onToggleFavorite,
+  onMore,
 }: TrackRowProps) {
   const theme = useTheme();
   const second = [track.artist || 'Unknown artist', showFolder ? track.folderName : track.album]
@@ -61,13 +65,26 @@ export const TrackRow = memo(function TrackRow({
           {formatTime(track.duration)}
         </ThemedText>
       </Pressable>
-      <IconButton
-        icon={track.favorite ? 'favorite' : 'heart_plus'}
-        label={track.favorite ? `Remove ${track.title} from favorites` : `Add ${track.title} to favorites`}
-        color={track.favorite ? theme.danger : theme.textSecondary}
-        pressedColor={theme.backgroundSelected}
-        onPress={() => onToggleFavorite(track)}
-      />
+      {track.favorite ? (
+        <Icon name="favorite" size={16} color={theme.danger} />
+      ) : null}
+      {onMore ? (
+        <IconButton
+          icon="more_vert"
+          label={`More for ${track.title}`}
+          color={theme.textSecondary}
+          pressedColor={theme.backgroundSelected}
+          onPress={() => onMore(track)}
+        />
+      ) : (
+        <IconButton
+          icon={track.favorite ? 'favorite' : 'heart_plus'}
+          label={track.favorite ? `Remove ${track.title} from favorites` : `Add ${track.title} to favorites`}
+          color={track.favorite ? theme.danger : theme.textSecondary}
+          pressedColor={theme.backgroundSelected}
+          onPress={() => onToggleFavorite(track)}
+        />
+      )}
     </View>
   );
 });

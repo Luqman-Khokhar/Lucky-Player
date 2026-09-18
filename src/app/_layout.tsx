@@ -51,6 +51,8 @@ export default function RootLayout() {
             />
             <Stack.Screen name="album/[albumId]" />
             <Stack.Screen name="music-folder/[bucketId]" />
+            <Stack.Screen name="playlist/[id]" />
+            <Stack.Screen name="queue" />
             <Stack.Screen name="cast" />
             <Stack.Screen name="cast-remote" options={{ animation: 'fade' }} />
           </Stack>

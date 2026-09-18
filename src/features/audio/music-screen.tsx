@@ -6,11 +6,13 @@ import { setMusicSegment, type MusicSegment } from '@/store/ui-slice';
 
 import { AlbumListScreen } from './album-list-screen';
 import { AudioFoldersScreen } from './audio-folders-screen';
+import { PlaylistsScreen } from './playlists-screen';
 import { TrackListScreen } from './track-list-screen';
 
 const SEGMENTS: Segment<MusicSegment>[] = [
   { key: 'tracks', label: 'Tracks' },
   { key: 'albums', label: 'Albums' },
+  { key: 'playlists', label: 'Playlists' },
   { key: 'folders', label: 'Folders' },
 ];
 
@@ -23,6 +25,7 @@ export function MusicScreen() {
   const segments = <SegmentedControl options={SEGMENTS} value={segment} onChange={select} label="Music view" />;
 
   if (segment === 'albums') return <AlbumListScreen segments={segments} />;
+  if (segment === 'playlists') return <PlaylistsScreen segments={segments} />;
   if (segment === 'folders') return <AudioFoldersScreen segments={segments} />;
   return <TrackListScreen title="Music" allowFavoritesFilter segments={segments} />;
 }

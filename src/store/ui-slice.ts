@@ -5,7 +5,7 @@ export const LIBRARY_SEGMENTS = ['folders', 'videos', 'recent'] as const;
 export type LibrarySegment = (typeof LIBRARY_SEGMENTS)[number];
 
 /** The three views of the music library, shown as segments inside the Music tab. */
-export const MUSIC_SEGMENTS = ['tracks', 'albums', 'folders'] as const;
+export const MUSIC_SEGMENTS = ['tracks', 'albums', 'playlists', 'folders'] as const;
 export type MusicSegment = (typeof MUSIC_SEGMENTS)[number];
 
 export type UiState = {

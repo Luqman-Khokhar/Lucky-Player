@@ -2,6 +2,7 @@ import { NativeModule, requireNativeModule } from 'expo';
 
 import type {
   AudioPlaybackState,
+  AudioQueueEntry,
   CastControlAction,
   CastPlayback,
   CastState,
@@ -36,8 +37,17 @@ declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
   /** Every music track MediaStore knows about. Rejects with ERR_PERMISSION without audio access. */
   scanAudio(): Promise<ScannedAudio[]>;
 
-  /** Replaces the music queue (JSON `AudioQueueItem[]`) and starts playing at `startIndex`. */
-  audioSetQueue(queueJson: string, startIndex: number, positionMs: number): Promise<void>;
+  /**
+   * Replaces the music queue (JSON `AudioQueueItem[]`) and starts at `startIndex`.
+   * `autoPlay` false loads the track paused, which is how a saved queue comes back after a restart.
+   */
+  audioSetQueue(queueJson: string, startIndex: number, positionMs: number, autoPlay: boolean): Promise<void>;
+  /** Adds tracks (JSON `AudioQueueItem[]`) after the playing one, or at the end. */
+  audioQueueAdd(queueJson: string, playNext: boolean): Promise<void>;
+  /** Moves a queued track. Both indexes are positions in the play order. */
+  audioQueueMove(from: number, to: number): Promise<void>;
+  audioQueueRemove(index: number): Promise<void>;
+  getAudioQueue(): Promise<AudioQueueEntry[]>;
   audioPlay(): Promise<void>;
   audioPause(): Promise<void>;
   audioToggle(): Promise<void>;

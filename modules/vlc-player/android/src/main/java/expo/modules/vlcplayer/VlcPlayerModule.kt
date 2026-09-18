@@ -137,9 +137,19 @@ class VlcPlayerModule : Module() {
       }
     }
 
-    AsyncFunction("audioSetQueue") { queueJson: String, startIndex: Int, positionMs: Double ->
-      AudioPlayback.setQueue(context, queueJson, startIndex, positionMs.toLong())
+    AsyncFunction("audioSetQueue") { queueJson: String, startIndex: Int, positionMs: Double, autoPlay: Boolean ->
+      AudioPlayback.setQueue(context, queueJson, startIndex, positionMs.toLong(), autoPlay)
     }
+
+    AsyncFunction("audioQueueAdd") { queueJson: String, playNext: Boolean ->
+      AudioPlayback.queueAdd(context, queueJson, playNext)
+    }
+
+    AsyncFunction("audioQueueMove") { from: Int, to: Int -> AudioPlayback.queueMove(from, to) }
+
+    AsyncFunction("audioQueueRemove") { index: Int -> AudioPlayback.queueRemove(index) }
+
+    AsyncFunction("getAudioQueue") { AudioPlayback.queueSnapshot() }
 
     AsyncFunction("audioPlay") { AudioPlayback.play() }
 

@@ -188,6 +188,18 @@ export async function listTracks(query: TrackQuery): Promise<LibraryTrack[]> {
   return rows.map(toTrack);
 }
 
+/** Tracks by uri, for restoring a saved queue. Missing files are simply absent from the result. */
+export async function listTracksByUri(uris: readonly string[]): Promise<LibraryTrack[]> {
+  if (uris.length === 0) return [];
+  const db = await getDatabase();
+  const placeholders = uris.map(() => '?').join(', ');
+  const rows = await db.getAllAsync<TrackRow>(
+    `${TRACK_SELECT} WHERE ${VISIBLE} AND a.uri IN (${placeholders})`,
+    [...uris]
+  );
+  return rows.map(toTrack);
+}
+
 /** Started but unfinished tracks, most recently played first. */
 export async function listRecentTracks(limit: number): Promise<LibraryTrack[]> {
   const db = await getDatabase();

@@ -17,6 +17,7 @@ export const initialAudioState: AudioState = {
   durationMs: 0,
   index: null,
   queueSize: 0,
+  queueVersion: 0,
   repeat: 'off',
   shuffle: false,
   rate: 1,

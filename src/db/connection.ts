@@ -144,7 +144,9 @@ let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 async function openAndMigrate(): Promise<SQLite.SQLiteDatabase> {
   const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
-  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
+  // busy_timeout makes a writer wait for a lock instead of failing outright: the library scan holds an
+  // exclusive transaction for a while, and playback keeps saving positions and the queue right through it.
+  await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
   while (version < MIGRATIONS.length) {

@@ -18,6 +18,8 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useAppSelector } from '@/store';
 import { formatCount } from '@/utils/format';
 
+import { AddToPlaylistSheet } from './add-to-playlist-sheet';
+import { TrackActionsSheet } from './track-actions-sheet';
 import { TrackRow } from './track-row';
 import { useAudioActions } from './use-audio-actions';
 import { useMiniPlayerInset } from './use-mini-player-inset';
@@ -52,7 +54,9 @@ export function TrackListScreen({
   allowFavoritesFilter = false,
   segments,
 }: TrackListScreenProps) {
-  const { playTrack, toggleFavorite } = useAudioActions();
+  const { playTrack, queueTracks, toggleFavorite } = useAudioActions();
+  const [menuTrack, setMenuTrack] = useState<LibraryTrack | null>(null);
+  const [playlistTrack, setPlaylistTrack] = useState<LibraryTrack | null>(null);
   const scanning = useAppSelector((state) => state.library.scanStatus === 'scanning');
   const { rescan } = useLibraryActions();
   const miniPlayerInset = useMiniPlayerInset();
@@ -67,6 +71,14 @@ export function TrackListScreen({
   const tracks = useLibraryQuery(`tracks:${JSON.stringify(query)}`, () => listTracks(query));
 
   const play = useCallback((track: LibraryTrack) => playTrack(track, tracks.data ?? []), [playTrack, tracks.data]);
+
+  const queueAndClose = useCallback(
+    (track: LibraryTrack, playNext: boolean) => {
+      queueTracks([track], playNext);
+      setMenuTrack(null);
+    },
+    [queueTracks]
+  );
 
   const subtitle =
     subtitleOverride ??
@@ -128,6 +140,7 @@ export function TrackListScreen({
             showTrackNumber={inAlbum}
             onPress={play}
             onToggleFavorite={toggleFavorite}
+            onMore={setMenuTrack}
           />
         )}
         refreshing={scanning}
@@ -175,6 +188,26 @@ export function TrackListScreen({
         )}
         {renderList()}
       </PermissionGate>
+
+      <TrackActionsSheet
+        track={menuTrack}
+        onClose={() => setMenuTrack(null)}
+        onPlayNext={(track) => queueAndClose(track, true)}
+        onAddToQueue={(track) => queueAndClose(track, false)}
+        onAddToPlaylist={(track) => {
+          setMenuTrack(null);
+          setPlaylistTrack(track);
+        }}
+        onToggleFavorite={(track) => {
+          toggleFavorite(track);
+          setMenuTrack(null);
+        }}
+      />
+      <AddToPlaylistSheet
+        tracks={playlistTrack ? [playlistTrack] : []}
+        open={playlistTrack !== null}
+        onClose={() => setPlaylistTrack(null)}
+      />
     </ThemedView>
   );
 }

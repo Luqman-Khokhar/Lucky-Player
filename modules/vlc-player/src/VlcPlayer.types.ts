@@ -185,6 +185,9 @@ export type AudioQueueItem = {
   duration: number;
 };
 
+/** A queue entry as the queue screen sees it, in play order. */
+export type AudioQueueEntry = AudioQueueItem & { index: number };
+
 export type AudioPlaybackState = {
   /** False when nothing is loaded and the notification is gone. */
   active: boolean;
@@ -197,9 +200,11 @@ export type AudioPlaybackState = {
   artKey: string | null;
   positionMs: number;
   durationMs: number;
-  /** Index into the queue as it was handed over, not the shuffled order. */
+  /** Position in the play order, which is what the queue screen lists. */
   index: number | null;
   queueSize: number;
+  /** Bumped whenever the queue changes; re-read the queue when it moves. */
+  queueVersion: number;
   repeat: RepeatMode;
   shuffle: boolean;
   rate: number;

@@ -16,7 +16,7 @@ type AlbumArtProps = {
   artKey: string;
   width: number;
   /** Fallback glyph when the track carries no embedded art. */
-  icon?: 'music_note' | 'album' | 'folder';
+  icon?: 'music_note' | 'album' | 'folder' | 'playlist_play';
   badge?: string;
 };
 
