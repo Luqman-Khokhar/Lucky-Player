@@ -3,11 +3,13 @@ import * as MediaLibrary from 'expo-media-library';
 
 import {
   addFolderSource,
+  countTracks,
   countVideos,
   listFolderSources,
   markFolderScanFailed,
   removeFolderSource,
   syncFolderVideos,
+  syncScannedAudio,
   syncScannedVideos,
   type FolderSource,
 } from '@/db';
@@ -22,6 +24,7 @@ export type LibraryState = {
   scanError: string | null;
   lastScanAt: number | null;
   videoCount: number;
+  trackCount: number;
   /** Bumped whenever library rows change; queries refetch on change. */
   version: number;
 };
@@ -36,6 +39,7 @@ const initialState: LibraryState = {
   scanError: null,
   lastScanAt: null,
   videoCount: 0,
+  trackCount: 0,
   version: 0,
 };
 
@@ -46,9 +50,10 @@ function messageOf(error: unknown, fallback: string): string {
 export const resolveLibraryPermission = createAsyncThunk(
   'library/permission',
   async ({ request }: { request: boolean }) => {
+    // Android asks for video and audio access separately; the library needs both.
     const response = request
-      ? await MediaLibrary.requestPermissionsAsync(false, ['video'])
-      : await MediaLibrary.getPermissionsAsync(false, ['video']);
+      ? await MediaLibrary.requestPermissionsAsync(false, ['video', 'audio'])
+      : await MediaLibrary.getPermissionsAsync(false, ['video', 'audio']);
     const permission: LibraryPermission = !response.granted
       ? 'denied'
       : response.accessPrivileges === 'limited'
@@ -58,13 +63,19 @@ export const resolveLibraryPermission = createAsyncThunk(
   }
 );
 
-/** MediaStore (when allowed) plus every added folder, then keeps the thumbnail cache under its cap. */
+/** MediaStore videos and music (when allowed) plus every added folder, then keeps the thumbnail cache under its cap. */
 export const scanLibrary = createAsyncThunk(
   'library/scan',
   async (_options: void | { force?: boolean }, { getState }) => {
     const { library } = getState() as { library: LibraryState };
     if (library.permission !== 'denied') {
       await syncScannedVideos(await VlcPlayer.scanVideos());
+      try {
+        await syncScannedAudio(await VlcPlayer.scanAudio());
+      } catch (error) {
+        // Audio access can be refused on its own; the video library must still scan.
+        console.warn('[library] audio scan failed', error);
+      }
     }
     for (const source of await listFolderSources()) {
       try {
@@ -75,7 +86,7 @@ export const scanLibrary = createAsyncThunk(
       }
     }
     await VlcPlayer.trimThumbnailCache(THUMBNAIL_CACHE_MAX_BYTES).catch(() => 0);
-    return { videoCount: await countVideos(), scannedAt: Date.now() };
+    return { videoCount: await countVideos(), trackCount: await countTracks(), scannedAt: Date.now() };
   },
   {
     condition: (options, { getState }) => {
@@ -126,6 +137,7 @@ const librarySlice = createSlice({
         state.scanStatus = 'idle';
         state.lastScanAt = action.payload.scannedAt;
         state.videoCount = action.payload.videoCount;
+        state.trackCount = action.payload.trackCount;
         state.version += 1;
       })
       .addCase(scanLibrary.rejected, (state, action) => {

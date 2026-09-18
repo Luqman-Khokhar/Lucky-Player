@@ -135,6 +135,26 @@ class VlcPlayerModule : Module() {
       }
     }
 
+    AsyncFunction("scanAudio") { promise: Promise ->
+      val appContext = context
+      scanExecutor.execute {
+        try {
+          promise.resolve(MediaScanner.scanAudio(appContext))
+        } catch (e: SecurityException) {
+          promise.reject("ERR_PERMISSION", "Audio access is not granted", e)
+        } catch (e: Exception) {
+          promise.reject("ERR_SCAN", e.message ?: "Could not scan audio", e)
+        }
+      }
+    }
+
+    AsyncFunction("getAlbumArt") { uri: String, key: String, width: Int, promise: Promise ->
+      val appContext = context
+      thumbnailExecutor.execute {
+        promise.resolve(ThumbnailCache.get(appContext, uri, key, width, artwork = true))
+      }
+    }
+
     AsyncFunction("getThumbnail") { uri: String, key: String, width: Int, promise: Promise ->
       val appContext = context
       thumbnailExecutor.execute {

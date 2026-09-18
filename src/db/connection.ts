@@ -104,6 +104,40 @@ const MIGRATIONS: string[] = [
   ALTER TABLE playback_state ADD COLUMN hw_mode TEXT;
   ALTER TABLE playback_state ADD COLUMN subtitle_uri TEXT;
   `,
+  // v5: music library. Kept apart from videos: the columns barely overlap and every video query
+  // would otherwise have to filter by media type. playback_state and playlists stay shared.
+  `
+  CREATE TABLE IF NOT EXISTS audio (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uri TEXT NOT NULL UNIQUE,
+    media_id INTEGER,
+    name TEXT NOT NULL,
+    title TEXT NOT NULL,
+    artist TEXT,
+    album TEXT,
+    album_id INTEGER,
+    track_no INTEGER,
+    year INTEGER,
+    folder TEXT,
+    bucket_id TEXT,
+    relative_path TEXT,
+    size INTEGER,
+    duration INTEGER,
+    mime_type TEXT,
+    mtime INTEGER,
+    added_at INTEGER,
+    favorite INTEGER NOT NULL DEFAULT 0,
+    hidden INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'mediastore',
+    source_id INTEGER,
+    scan_id INTEGER NOT NULL DEFAULT 0,
+    deleted_at INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_audio_bucket ON audio(bucket_id) WHERE deleted_at IS NULL;
+  CREATE INDEX IF NOT EXISTS idx_audio_album ON audio(album_id) WHERE deleted_at IS NULL;
+  CREATE INDEX IF NOT EXISTS idx_audio_artist ON audio(artist) WHERE deleted_at IS NULL;
+  CREATE INDEX IF NOT EXISTS idx_audio_mtime ON audio(mtime) WHERE deleted_at IS NULL;
+  `,
 ];
 
 let databasePromise: Promise<SQLite.SQLiteDatabase> | null = null;

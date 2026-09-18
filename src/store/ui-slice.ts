@@ -4,12 +4,18 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 export const LIBRARY_SEGMENTS = ['folders', 'videos', 'recent'] as const;
 export type LibrarySegment = (typeof LIBRARY_SEGMENTS)[number];
 
+/** The three views of the music library, shown as segments inside the Music tab. */
+export const MUSIC_SEGMENTS = ['tracks', 'albums', 'folders'] as const;
+export type MusicSegment = (typeof MUSIC_SEGMENTS)[number];
+
 export type UiState = {
   librarySegment: LibrarySegment;
+  musicSegment: MusicSegment;
 };
 
 const initialState: UiState = {
   librarySegment: 'folders',
+  musicSegment: 'tracks',
 };
 
 const uiSlice = createSlice({
@@ -19,8 +25,11 @@ const uiSlice = createSlice({
     setLibrarySegment(state, action: PayloadAction<LibrarySegment>) {
       state.librarySegment = action.payload;
     },
+    setMusicSegment(state, action: PayloadAction<MusicSegment>) {
+      state.musicSegment = action.payload;
+    },
   },
 });
 
-export const { setLibrarySegment } = uiSlice.actions;
+export const { setLibrarySegment, setMusicSegment } = uiSlice.actions;
 export default uiSlice.reducer;

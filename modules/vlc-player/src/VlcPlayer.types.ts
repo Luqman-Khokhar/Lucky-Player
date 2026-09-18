@@ -143,6 +143,34 @@ export type ScannedVideo = {
   relativePath: string;
 };
 
+export type ScannedAudio = {
+  mediaId: number;
+  /** content://media/external/audio/media/<id> */
+  uri: string;
+  /** File name on disk. */
+  name: string;
+  /** Tagged title, falling back to the file name. */
+  title: string;
+  size: number;
+  /** Milliseconds */
+  duration: number;
+  /** Epoch milliseconds */
+  modifiedAt: number;
+  addedAt: number;
+  mimeType: string;
+  /** Empty when the file carries no tag. */
+  artist: string;
+  album: string;
+  albumId: number;
+  /** Track number within its disc, 0 when untagged. */
+  trackNo: number;
+  /** 0 when untagged. */
+  year: number;
+  bucketId: string;
+  bucketName: string;
+  relativePath: string;
+};
+
 export type PickedFolder = {
   /** Persisted SAF tree URI */
   uri: string;

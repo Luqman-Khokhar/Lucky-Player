@@ -17,6 +17,11 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon md="video_library" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="music">
+        <NativeTabs.Trigger.Label>Music</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon md="music_note" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="settings">
         <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="settings" />

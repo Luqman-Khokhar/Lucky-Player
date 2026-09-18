@@ -11,6 +11,7 @@ import type {
   PickedFolder,
   PickedSubtitle,
   PickedVideo,
+  ScannedAudio,
   ScannedVideo,
   SoundEffectsStatus,
   EqualizerInfo,
@@ -28,8 +29,12 @@ type VlcPlayerModuleEvents = {
 declare class VlcPlayerModule extends NativeModule<VlcPlayerModuleEvents> {
   /** Every video MediaStore knows about. Rejects with ERR_PERMISSION without video access. */
   scanVideos(): Promise<ScannedVideo[]>;
+  /** Every music track MediaStore knows about. Rejects with ERR_PERMISSION without audio access. */
+  scanAudio(): Promise<ScannedAudio[]>;
   /** file:// JPEG path, or null when no frame could be read. `key` must change when the file changes. */
   getThumbnail(uri: string, key: string, width: number): Promise<string | null>;
+  /** Square album art as a file:// JPEG path, or null when the track carries none. Shares the thumbnail cache. */
+  getAlbumArt(uri: string, key: string, width: number): Promise<string | null>;
   /** Deletes least recently used thumbnails above `maxBytes` (0 clears all). Resolves bytes remaining. */
   trimThumbnailCache(maxBytes: number): Promise<number>;
   /** System folder picker with persisted read access. Resolves null when cancelled. */

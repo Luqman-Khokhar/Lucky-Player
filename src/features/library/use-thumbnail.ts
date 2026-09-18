@@ -22,10 +22,14 @@ function remember(cacheKey: string, path: string | null) {
   resolved.set(cacheKey, path);
 }
 
-function request(uri: string, key: string, width: number, cacheKey: string): Promise<string | null> {
+/** A video frame, or the square album art of an audio file. */
+export type ArtworkKind = 'frame' | 'albumArt';
+
+function request(uri: string, key: string, width: number, cacheKey: string, kind: ArtworkKind): Promise<string | null> {
   let promise = pending.get(cacheKey);
   if (!promise) {
-    promise = VlcPlayer.getThumbnail(uri, key, width)
+    const fetcher = kind === 'albumArt' ? VlcPlayer.getAlbumArt : VlcPlayer.getThumbnail;
+    promise = fetcher.call(VlcPlayer, uri, key, width)
       .catch(() => null)
       .then((path) => {
         pending.delete(cacheKey);
@@ -37,8 +41,8 @@ function request(uri: string, key: string, width: number, cacheKey: string): Pro
   return promise;
 }
 
-/** Thumbnail file path for a video, or null while loading or when none could be made. */
-export function useThumbnail(uri: string, key: string, width: number): string | null {
+/** Thumbnail file path for a video or audio file, or null while loading or when none could be made. */
+export function useThumbnail(uri: string, key: string, width: number, kind: ArtworkKind = 'frame'): string | null {
   const cacheKey = `${key}@${width}`;
   const [loaded, setLoaded] = useState<{ cacheKey: string; path: string | null } | null>(null);
 
@@ -46,7 +50,7 @@ export function useThumbnail(uri: string, key: string, width: number): string | 
     if (resolved.has(cacheKey)) return;
     let active = true;
     const timer = setTimeout(() => {
-      request(uri, key, width, cacheKey).then((path) => {
+      request(uri, key, width, cacheKey, kind).then((path) => {
         if (active) setLoaded({ cacheKey, path });
       });
     }, REQUEST_DELAY_MS);
@@ -54,7 +58,7 @@ export function useThumbnail(uri: string, key: string, width: number): string | 
       active = false;
       clearTimeout(timer);
     };
-  }, [uri, key, width, cacheKey]);
+  }, [uri, key, width, cacheKey, kind]);
 
   // Recycled list rows change key before the effect runs; never show the previous row's image.
   if (resolved.has(cacheKey)) return resolved.get(cacheKey) ?? null;
