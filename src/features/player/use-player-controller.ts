@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useWindowDimensions } from 'react-native';
 
 import { useAppSelector } from '@/store';
 import VlcPlayer, {
@@ -24,6 +25,7 @@ type Handler<K extends keyof VlcPlayerViewProps> = NonNullable<VlcPlayerViewProp
 /** Owns playback state for one video and exposes native view props plus user actions. */
 export function usePlayerController(uri: string | undefined, onEnded?: () => void) {
   const settings = useAppSelector((state) => state.settings);
+  const { width, height } = useWindowDimensions();
   const { prepared, progressRef, reportProgress, markEnded, rememberFallback, restartFromCurrent, saveChoices } =
     usePlaybackSession(uri, settings);
   const playerRef = useRef<VlcPlayerViewRef>(null);
@@ -38,6 +40,8 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
   const [subtitleTrack, setSubtitleTrack] = useState<number>();
   const [speed, setSpeed] = useState(1);
   const [aspect, setAspect] = useState<AspectMode>(settings.defaultAspect);
+  // Once the aspect ratio is picked by hand, rotating no longer changes it for the rest of this video.
+  const aspectChosen = useRef(false);
   const [zoom, setZoom] = useState(1);
   const [boosted, setBoosted] = useState(false);
   const [hwOverride, setHwOverride] = useState<HwDecodingMode | null>(null);
@@ -62,6 +66,15 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     const id = setTimeout(() => setNotice(null), NOTICE_MS);
     return () => clearTimeout(id);
   }, [notice]);
+
+  // Turning the phone sideways fills the screen, cropping the edges, and turning it back restores the fit.
+  // The rotation lock keeps the window in one orientation, so locking it also stops this.
+  const landscape = width > height;
+  useEffect(() => {
+    if (aspectChosen.current) return;
+    setAspect(landscape ? 'fitScreen' : settings.defaultAspect);
+    setZoom(1);
+  }, [landscape, settings.defaultAspect]);
 
   const seekTo = useCallback(
     (positionMs: number) => {
@@ -185,6 +198,7 @@ export function usePlayerController(uri: string | undefined, onEnded?: () => voi
     },
     selectSpeed: setSpeed,
     selectAspect: (mode) => {
+      aspectChosen.current = true;
       setAspect(mode);
       setZoom(1);
     },
