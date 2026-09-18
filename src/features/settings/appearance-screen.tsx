@@ -6,15 +6,22 @@ import { ThemedView } from '@/components/themed-view';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { ScreenHeader } from '@/components/ui/screen-header';
+import { SegmentedControl, type Segment } from '@/components/ui/segmented-control';
 import { Accents, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppScheme } from '@/hooks/use-app-scheme';
 import { useGoBack } from '@/hooks/use-go-back';
 import { useTheme } from '@/hooks/use-theme';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { setAccent } from '@/store/settings-slice';
+import { setAccent, setThemeMode, type ThemeMode } from '@/store/settings-slice';
 
 import { AccentSwatches } from './accent-swatches';
 import { SettingsSection } from './settings-section';
+
+const THEME_SEGMENTS: Segment<ThemeMode>[] = [
+  { key: 'system', label: 'System' },
+  { key: 'light', label: 'Light' },
+  { key: 'dark', label: 'Dark' },
+];
 
 export function AppearanceScreen() {
   const theme = useTheme();
@@ -22,13 +29,28 @@ export function AppearanceScreen() {
   const goBack = useGoBack();
   const dispatch = useAppDispatch();
   const accent = useAppSelector((state) => state.settings.accent);
-  const scheme = useColorScheme();
+  const themeMode = useAppSelector((state) => state.settings.themeMode);
+  const scheme = useAppScheme();
 
   return (
     <ThemedView style={styles.root}>
       <ScreenHeader title="Appearance" subtitle="How the app looks" onBack={goBack} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.four }]}>
         <View style={styles.column}>
+          <SettingsSection title="Theme">
+            <ThemedText type="small" themeColor="textSecondary">
+              System follows the light and dark setting on your phone. Pick Light or Dark to keep the app on
+              one of them whatever the phone does.
+            </ThemedText>
+            <SegmentedControl
+              flush
+              options={THEME_SEGMENTS}
+              value={themeMode}
+              onChange={(mode) => dispatch(setThemeMode(mode))}
+              label="Theme"
+            />
+          </SettingsSection>
+
           <SettingsSection title="Accent color">
             <ThemedText type="small" themeColor="textSecondary">
               Colors buttons, highlights and the playback bars. Light and dark each use their own shade of
@@ -56,9 +78,11 @@ export function AppearanceScreen() {
               </View>
             </View>
             <ThemedText type="caption" themeColor="textTertiary" accessibilityLiveRegion="polite">
-              {scheme === 'dark'
-                ? 'Showing the dark shades, because your phone is set to dark.'
-                : 'Showing the light shades, because your phone is set to light.'}
+              {themeMode === 'system'
+                ? scheme === 'dark'
+                  ? 'Showing the dark shades, because your phone is set to dark.'
+                  : 'Showing the light shades, because your phone is set to light.'
+                : `Showing the ${scheme} shades, because the theme is set to ${scheme}.`}
             </ThemedText>
           </SettingsSection>
         </View>

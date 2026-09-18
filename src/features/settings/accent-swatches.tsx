@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { Accents, ACCENT_CHOICES, Radius, Spacing, type AccentName } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppScheme } from '@/hooks/use-app-scheme';
 import { useTheme } from '@/hooks/use-theme';
 
 const SWATCH_SIZE = 56;
@@ -16,8 +16,7 @@ type AccentSwatchesProps = {
 /** One filled circle per accent. The chosen one carries a check and a ring drawn in its own color. */
 export function AccentSwatches({ value, onChange }: AccentSwatchesProps) {
   const theme = useTheme();
-  const scheme = useColorScheme();
-  const variant = scheme === 'dark' ? 'dark' : 'light';
+  const variant = useAppScheme();
 
   return (
     <View accessibilityRole="radiogroup" accessibilityLabel="Accent color" style={styles.grid}>

@@ -6,6 +6,7 @@ import {
   SEEK_STEP_CHOICES,
   SUBTITLE_COLOR_CHOICES,
   SUBTITLE_SIZE_CHOICES,
+  THEME_MODE_CHOICES,
   settingsHydrated,
   type SettingsState,
 } from './settings-slice';
@@ -32,6 +33,8 @@ function parseSettings(value: unknown): Partial<SettingsState> {
   if (SEEK_STEP_CHOICES.some((choice) => choice === input.seekStepSec)) result.seekStepSec = input.seekStepSec as number;
   const accent = ACCENT_CHOICES.find((choice) => choice === input.accent);
   if (accent) result.accent = accent;
+  const themeMode = THEME_MODE_CHOICES.find((choice) => choice === input.themeMode);
+  if (themeMode) result.themeMode = themeMode;
   return result;
 }
 

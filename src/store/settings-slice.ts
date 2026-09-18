@@ -6,6 +6,9 @@ import type { AspectMode, HwDecodingMode } from '@modules/vlc-player';
 /** Player skip buttons have matching icons only for these steps. */
 export const SEEK_STEP_CHOICES = [5, 10, 30] as const;
 
+export const THEME_MODE_CHOICES = ['system', 'light', 'dark'] as const;
+export type ThemeMode = (typeof THEME_MODE_CHOICES)[number];
+
 export const SUBTITLE_SIZE_CHOICES = ['small', 'normal', 'large', 'huge'] as const;
 export const SUBTITLE_COLOR_CHOICES = ['white', 'yellow'] as const;
 export type SubtitleSize = (typeof SUBTITLE_SIZE_CHOICES)[number];
@@ -25,6 +28,8 @@ export type SettingsState = {
   subtitleBackground: boolean;
   /** Which accent colors the app draws with. See `Accents` in the theme. */
   accent: AccentName;
+  /** Follow the phone's light or dark setting, or override it. */
+  themeMode: ThemeMode;
 };
 
 const initialState: SettingsState = {
@@ -39,6 +44,7 @@ const initialState: SettingsState = {
   subtitleColor: 'white',
   subtitleBackground: false,
   accent: DEFAULT_ACCENT,
+  themeMode: 'system',
 };
 
 const settingsSlice = createSlice({
@@ -81,6 +87,9 @@ const settingsSlice = createSlice({
     setAccent(state, action: PayloadAction<AccentName>) {
       state.accent = action.payload;
     },
+    setThemeMode(state, action: PayloadAction<ThemeMode>) {
+      state.themeMode = action.payload;
+    },
   },
 });
 
@@ -97,5 +106,6 @@ export const {
   setSubtitleColor,
   setSubtitleBackground,
   setAccent,
+  setThemeMode,
 } = settingsSlice.actions;
 export default settingsSlice.reducer;

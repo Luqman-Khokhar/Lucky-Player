@@ -12,17 +12,29 @@ type SegmentedControlProps<K extends string> = {
   onChange: (value: K) => void;
   /** Names the group for screen readers, e.g. "Library view". */
   label: string;
+  /** Drops the outer margins, for a control that sits inside a card that already has padding. */
+  flush?: boolean;
 };
 
 /** Equal-width tabs that switch between views of the same content. */
-export function SegmentedControl<K extends string>({ options, value, onChange, label }: SegmentedControlProps<K>) {
+export function SegmentedControl<K extends string>({
+  options,
+  value,
+  onChange,
+  label,
+  flush = false,
+}: SegmentedControlProps<K>) {
   const theme = useTheme();
 
   return (
     <View
       accessibilityRole="tablist"
       accessibilityLabel={label}
-      style={[styles.group, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      style={[
+        styles.group,
+        flush && styles.flush,
+        { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+      ]}>
       {options.map((option) => {
         const selected = option.key === value;
         return (
@@ -59,6 +71,10 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.two,
     borderRadius: Radius.pill,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  flush: {
+    marginHorizontal: 0,
+    marginBottom: 0,
   },
   segment: {
     flex: 1,

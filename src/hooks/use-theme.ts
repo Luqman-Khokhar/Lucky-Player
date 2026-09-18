@@ -6,14 +6,13 @@
 import { useMemo } from 'react';
 
 import { Accents, Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppScheme } from '@/hooks/use-app-scheme';
 import { useAppSelector } from '@/store';
 
-/** The palette for the current system theme, with the accent the user picked in Appearance laid over it. */
+/** The palette for the current theme, with the accent the user picked in Appearance laid over it. */
 export function useTheme() {
-  const scheme = useColorScheme();
+  const theme = useAppScheme();
   const accent = useAppSelector((state) => state.settings.accent);
-  const theme = scheme === 'dark' ? 'dark' : 'light';
 
   return useMemo(() => ({ ...Colors[theme], ...Accents[accent][theme] }), [theme, accent]);
 }

@@ -1,7 +1,9 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import { StyleSheet, useColorScheme } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
+import { useEffect, type PropsWithChildren } from 'react';
+import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Provider } from 'react-redux';
 
@@ -13,6 +15,7 @@ import { MiniPlayer } from '@/features/audio/mini-player';
 import { CastSync } from '@/features/cast/cast-sync';
 import { SubtitleStyleSync } from '@/features/player/subtitle-style-sync';
 import { SoundEffectsSync } from '@/features/sound/sound-effects-sync';
+import { useAppScheme } from '@/hooks/use-app-scheme';
 import { store } from '@/store';
 import { hydrateSettings, persistSettingsChanges } from '@/store/settings-persistence';
 import { hydrateSound } from '@/store/sound-persistence';
@@ -46,9 +49,30 @@ const navigationThemes = {
   },
 };
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+/**
+ * Reads the theme the user settled on, which lives in the store, so it has to sit inside the Provider
+ * rather than in `RootLayout` itself.
+ */
+function AppTheme({ children }: PropsWithChildren) {
+  const scheme = useAppScheme();
+  const background = scheme === 'dark' ? Colors.dark.background : Colors.light.background;
 
+  // The window behind React shows through during screen transitions, so it has to follow the theme too.
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(background).catch((error: unknown) =>
+      console.warn('[theme] window background failed', error)
+    );
+  }, [background]);
+
+  return (
+    <ThemeProvider value={scheme === 'dark' ? navigationThemes.dark : navigationThemes.light}>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
+      {children}
+    </ThemeProvider>
+  );
+}
+
+export default function RootLayout() {
   useEffect(() => {
     VlcPlayer.warmUp().catch((error: unknown) => console.warn('[vlc] warm-up failed', error));
     hydrateSound();
@@ -61,7 +85,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <Provider store={store}>
-        <ThemeProvider value={colorScheme === 'dark' ? navigationThemes.dark : navigationThemes.light}>
+        <AppTheme>
           <AnimatedSplashOverlay />
           <SubtitleStyleSync />
           <SoundEffectsSync />
@@ -85,7 +109,7 @@ export default function RootLayout() {
             <Stack.Screen name="cast-remote" options={{ animation: 'fade' }} />
           </Stack>
           <MiniPlayer />
-        </ThemeProvider>
+        </AppTheme>
       </Provider>
     </GestureHandlerRootView>
   );
