@@ -3,12 +3,17 @@
  * https://docs.expo.dev/guides/color-schemes/
  */
 
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useMemo } from 'react';
 
+import { Accents, Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAppSelector } from '@/store';
+
+/** The palette for the current system theme, with the accent the user picked in Appearance laid over it. */
 export function useTheme() {
   const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
+  const accent = useAppSelector((state) => state.settings.accent);
+  const theme = scheme === 'dark' ? 'dark' : 'light';
 
-  return Colors[theme];
+  return useMemo(() => ({ ...Colors[theme], ...Accents[accent][theme] }), [theme, accent]);
 }

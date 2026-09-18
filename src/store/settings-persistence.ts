@@ -1,3 +1,4 @@
+import { ACCENT_CHOICES } from '@/constants/theme';
 import { getSetting, setSetting } from '@/db';
 
 import { store } from './index';
@@ -29,6 +30,8 @@ function parseSettings(value: unknown): Partial<SettingsState> {
   const color = SUBTITLE_COLOR_CHOICES.find((choice) => choice === input.subtitleColor);
   if (color) result.subtitleColor = color;
   if (SEEK_STEP_CHOICES.some((choice) => choice === input.seekStepSec)) result.seekStepSec = input.seekStepSec as number;
+  const accent = ACCENT_CHOICES.find((choice) => choice === input.accent);
+  if (accent) result.accent = accent;
   return result;
 }
 

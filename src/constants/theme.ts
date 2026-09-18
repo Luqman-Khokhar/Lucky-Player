@@ -84,6 +84,132 @@ export const Colors = {
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
+/** The colors an accent replaces. Everything else in a theme stays put. */
+type AccentColors = {
+  accent: string;
+  onAccent: string;
+  accentSoft: string;
+  accentText: string;
+  playerAccent: string;
+};
+
+/**
+ * Accents the user can pick in Appearance. Each one carries a light and a dark version, because a color
+ * that reads well on paper is rarely the one that reads well on charcoal: the light version is deep
+ * enough to carry white text, the dark version bright enough to stand out with dark text on it.
+ */
+export const Accents = {
+  ember: {
+    label: 'Ember',
+    light: {
+      accent: '#C2410C',
+      onAccent: '#FFFFFF',
+      accentSoft: 'rgba(194, 65, 12, 0.12)',
+      accentText: '#9A3412',
+      playerAccent: '#FB923C',
+    },
+    dark: {
+      accent: '#F97316',
+      onAccent: '#1B1210',
+      accentSoft: 'rgba(249, 115, 22, 0.18)',
+      accentText: '#FDBA74',
+      playerAccent: '#FB923C',
+    },
+  },
+  amber: {
+    label: 'Amber',
+    light: {
+      accent: '#A16207',
+      onAccent: '#FFFFFF',
+      accentSoft: 'rgba(161, 98, 7, 0.14)',
+      accentText: '#854D0E',
+      playerAccent: '#FCD34D',
+    },
+    dark: {
+      accent: '#FBBF24',
+      onAccent: '#1B1508',
+      accentSoft: 'rgba(251, 191, 36, 0.18)',
+      accentText: '#FCD34D',
+      playerAccent: '#FCD34D',
+    },
+  },
+  rose: {
+    label: 'Rose',
+    light: {
+      accent: '#BE123C',
+      onAccent: '#FFFFFF',
+      accentSoft: 'rgba(190, 18, 60, 0.12)',
+      accentText: '#9F1239',
+      playerAccent: '#FDA4AF',
+    },
+    dark: {
+      accent: '#FB7185',
+      onAccent: '#1F0A10',
+      accentSoft: 'rgba(251, 113, 133, 0.18)',
+      accentText: '#FDA4AF',
+      playerAccent: '#FDA4AF',
+    },
+  },
+  moss: {
+    label: 'Moss',
+    light: {
+      accent: '#4D7C0F',
+      onAccent: '#FFFFFF',
+      accentSoft: 'rgba(77, 124, 15, 0.14)',
+      accentText: '#3F6212',
+      playerAccent: '#BEF264',
+    },
+    dark: {
+      accent: '#A3E635',
+      onAccent: '#131A08',
+      accentSoft: 'rgba(163, 230, 53, 0.18)',
+      accentText: '#BEF264',
+      playerAccent: '#BEF264',
+    },
+  },
+  pine: {
+    label: 'Pine',
+    light: {
+      accent: '#15803D',
+      onAccent: '#FFFFFF',
+      accentSoft: 'rgba(21, 128, 61, 0.14)',
+      accentText: '#166534',
+      playerAccent: '#6EE7B7',
+    },
+    dark: {
+      accent: '#34D399',
+      onAccent: '#06170F',
+      accentSoft: 'rgba(52, 211, 153, 0.18)',
+      accentText: '#6EE7B7',
+      playerAccent: '#6EE7B7',
+    },
+  },
+  clay: {
+    label: 'Clay',
+    light: {
+      accent: '#8D5524',
+      onAccent: '#FFFFFF',
+      accentSoft: 'rgba(141, 85, 36, 0.14)',
+      accentText: '#6B3F1A',
+      playerAccent: '#E8C9A8',
+    },
+    dark: {
+      accent: '#D3A17A',
+      onAccent: '#1A120C',
+      accentSoft: 'rgba(211, 161, 122, 0.18)',
+      accentText: '#E8C9A8',
+      playerAccent: '#E8C9A8',
+    },
+  },
+} as const satisfies Record<string, { label: string; light: AccentColors; dark: AccentColors }>;
+
+export type AccentName = keyof typeof Accents;
+
+export const ACCENT_CHOICES = Object.keys(Accents) as AccentName[];
+
+/** The accent the app starts with, and the one the base palette above is written around. */
+export const DEFAULT_ACCENT: AccentName = 'ember';
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */

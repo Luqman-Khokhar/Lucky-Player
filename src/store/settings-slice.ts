@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
+import { DEFAULT_ACCENT, type AccentName } from '@/constants/theme';
 import type { AspectMode, HwDecodingMode } from '@modules/vlc-player';
 
 /** Player skip buttons have matching icons only for these steps. */
@@ -22,6 +23,8 @@ export type SettingsState = {
   subtitleSize: SubtitleSize;
   subtitleColor: SubtitleColor;
   subtitleBackground: boolean;
+  /** Which accent colors the app draws with. See `Accents` in the theme. */
+  accent: AccentName;
 };
 
 const initialState: SettingsState = {
@@ -35,6 +38,7 @@ const initialState: SettingsState = {
   subtitleSize: 'normal',
   subtitleColor: 'white',
   subtitleBackground: false,
+  accent: DEFAULT_ACCENT,
 };
 
 const settingsSlice = createSlice({
@@ -74,6 +78,9 @@ const settingsSlice = createSlice({
     setSubtitleBackground(state, action: PayloadAction<boolean>) {
       state.subtitleBackground = action.payload;
     },
+    setAccent(state, action: PayloadAction<AccentName>) {
+      state.accent = action.payload;
+    },
   },
 });
 
@@ -89,5 +96,6 @@ export const {
   setSubtitleSize,
   setSubtitleColor,
   setSubtitleBackground,
+  setAccent,
 } = settingsSlice.actions;
 export default settingsSlice.reducer;
