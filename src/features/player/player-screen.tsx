@@ -58,10 +58,9 @@ export function PlayerScreen({ uri, title }: PlayerScreenProps) {
         title={current.title}
         system={system}
         locked={locked}
-        rotationLocked={rotation.locked}
         onBack={goBack}
         onToggleLock={toggleLock}
-        onToggleRotation={rotation.toggle}
+        onRotate={rotation.rotate}
         onPrevious={previous ? () => setCurrent(previous) : undefined}
         onNext={next ? () => setCurrent(next) : undefined}
         onEnded={next && autoPlayNext ? () => setCurrent(next) : undefined}

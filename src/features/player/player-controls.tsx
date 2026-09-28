@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -31,7 +31,6 @@ export type PlayerControlsProps = {
   skipMs: number;
   hasPrevious: boolean;
   hasNext: boolean;
-  rotationLocked: boolean;
   pictureInPictureSupported: boolean;
   /** Whether the sound keeps playing once the app leaves the screen. */
   backgroundAudio: boolean;
@@ -41,7 +40,8 @@ export type PlayerControlsProps = {
   onBack: () => void;
   onPrevious: () => void;
   onNext: () => void;
-  onToggleRotation: () => void;
+  /** Switches between portrait and landscape. */
+  onRotate: () => void;
   onTogglePlay: () => void;
   onSkip: (deltaMs: number) => void;
   onSeek: (positionMs: number) => void;
@@ -55,6 +55,8 @@ export function PlayerControls(props: PlayerControlsProps) {
   const { visible, locked, paused, position, duration, skipMs, onInteraction } = props;
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
   const reduceMotion = useReducedMotion();
   const opacity = useSharedValue(visible ? 1 : 0);
 
@@ -135,10 +137,10 @@ export function PlayerControls(props: PlayerControlsProps) {
               />
             ) : null}
             <IconButton
-              icon={props.rotationLocked ? 'screen_lock_rotation' : 'screen_rotation'}
-              label={props.rotationLocked ? 'Unlock rotation' : 'Lock rotation'}
+              icon="screen_rotation"
+              label={landscape ? 'Switch to portrait' : 'Switch to landscape'}
               {...colors}
-              onPress={withInteraction(props.onToggleRotation)}
+              onPress={withInteraction(props.onRotate)}
             />
             <IconButton icon="lock" label="Lock controls" {...colors} onPress={withInteraction(props.onToggleLock)} />
             <IconButton icon="settings" label="Settings" {...colors} onPress={props.onOpenSettings} />
