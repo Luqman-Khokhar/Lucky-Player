@@ -28,10 +28,9 @@ type PlayerSessionProps = {
   title: string;
   system: SystemControls;
   locked: boolean;
-  rotationLocked: boolean;
   onBack: () => void;
   onToggleLock: () => void;
-  onToggleRotation: () => void;
+  onRotate: () => void;
   /** Undefined when the queue has no video in that direction. */
   onPrevious?: () => void;
   onNext?: () => void;
@@ -156,7 +155,6 @@ export function PlayerSession(props: PlayerSessionProps) {
         skipMs={player.skipMs}
         hasPrevious={onPrevious !== undefined}
         hasNext={onNext !== undefined}
-        rotationLocked={props.rotationLocked}
         pictureInPictureSupported={player.pictureInPicture.supported}
         onPictureInPicture={player.pictureInPicture.enter}
         onCast={castToLaptop}
@@ -165,7 +163,7 @@ export function PlayerSession(props: PlayerSessionProps) {
         onBack={onBack}
         onPrevious={playPrevious}
         onNext={() => onNext?.()}
-        onToggleRotation={props.onToggleRotation}
+        onRotate={props.onRotate}
         onTogglePlay={player.togglePlay}
         onSkip={player.skip}
         onSeek={player.seekTo}
